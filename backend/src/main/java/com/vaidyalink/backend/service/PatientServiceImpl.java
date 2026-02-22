@@ -17,4 +17,9 @@ public class PatientServiceImpl implements PatientService {
     public Patient registerPatient(Patient patient) {
         return patientRepository.save(patient);
     }
+
+    @Override
+    public Patient getPatientById(Long id){
+        return patientRepository.findById(id).orElseThrow(()-> new RuntimeException("No patient found with this particular Id: "+id));
+    }
 }

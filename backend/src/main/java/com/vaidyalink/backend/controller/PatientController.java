@@ -2,6 +2,7 @@ package com.vaidyalink.backend.controller;
 
 import com.vaidyalink.backend.entity.Patient;
 import com.vaidyalink.backend.service.PatientService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -14,7 +15,7 @@ public class PatientController {
     }
 
     @PostMapping("/register")
-    public Patient registerPatient(@RequestBody Patient patient){
+    public Patient registerPatient(@Valid @RequestBody Patient patient){
         return patientService.registerPatient(patient);
     }
 

@@ -28,4 +28,16 @@ public class GlobalExceptionHandler {
 
         return errors;
     }
+
+    // This is for duplicate entries in the db
+    @ResponseStatus(HttpStatus.CONFLICT) // 409 Status Code
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public Map<String, String> handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex) {
+
+        Map<String, String> error = new HashMap<>();
+
+        error.put("error", "Email or Mobile number already in use!");
+
+        return error;
+    }
 }

@@ -40,4 +40,20 @@ public class GlobalExceptionHandler {
 
         return error;
     }
+
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public Map<String, String> handleTypeMismatch(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+
+        Map<String, String> error = new HashMap<>();
+
+        if ("status".equals(ex.getName())) {
+            error.put("error", "Invalid status provided. Accepted values are: PENDING, CONFIRMED, CANCELLED, COMPLETED.");
+        } else {
+            error.put("error", "Invalid value provided for parameter: " + ex.getName());
+        }
+
+        return error;
+    }
 }

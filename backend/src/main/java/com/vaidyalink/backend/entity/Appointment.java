@@ -30,8 +30,9 @@ public class Appointment {
     @Column(nullable=false)
     private LocalDate appointmentDate;
 
-    @Column(nullable=false)
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private AppointmentStatus status;
 
 
 

@@ -2,6 +2,7 @@ package com.vaidyalink.backend.controller;
 
 import com.vaidyalink.backend.dto.AppointmentRequest;
 import com.vaidyalink.backend.entity.Appointment;
+import com.vaidyalink.backend.entity.AppointmentStatus;
 import com.vaidyalink.backend.service.AppointmentService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -30,5 +31,13 @@ public class AppointmentController {
     @GetMapping("/doctor/{doctorId}")
     public List<Appointment> getDoctorAppointments(@PathVariable Long doctorId) {
         return appointmentService.getAppointmentsByDoctorId(doctorId);
+    }
+
+    @PatchMapping("/{appointmentId}/status")
+    public Appointment updateStatus(
+            @PathVariable Long appointmentId,
+            @RequestParam AppointmentStatus status) {
+
+        return appointmentService.updateAppointmentStatus(appointmentId, status);
     }
 }

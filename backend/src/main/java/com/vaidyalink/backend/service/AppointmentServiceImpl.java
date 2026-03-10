@@ -2,6 +2,7 @@ package com.vaidyalink.backend.service;
 
 import com.vaidyalink.backend.dto.AppointmentRequest;
 import com.vaidyalink.backend.entity.Appointment;
+import com.vaidyalink.backend.entity.AppointmentStatus;
 import com.vaidyalink.backend.entity.Doctor;
 import com.vaidyalink.backend.entity.Patient;
 import com.vaidyalink.backend.repository.AppointmentRepository;
@@ -41,7 +42,7 @@ public class AppointmentServiceImpl implements AppointmentService{
         appointment.setPatient(patient);
         appointment.setDoctor(doctor);
         appointment.setAppointmentDate(request.getAppointmentDate());
-        appointment.setStatus("PENDING");
+        appointment.setStatus(AppointmentStatus.PENDING);
 
         return appointmentRepository.save(appointment);
     }
@@ -55,4 +56,17 @@ public class AppointmentServiceImpl implements AppointmentService{
     public List<Appointment> getAppointmentsByDoctorId(Long doctorId){
         return appointmentRepository.findByDoctorId(doctorId);
     }
+
+    @Override
+    public Appointment updateAppointmentStatus(Long appointmentId, AppointmentStatus newStatus) {
+
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new RuntimeException("Appointment not found with ID: " + appointmentId));
+
+        appointment.setStatus(newStatus);
+
+        return appointmentRepository.save(appointment);
+    }
+
+
 }

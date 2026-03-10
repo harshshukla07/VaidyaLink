@@ -2,6 +2,7 @@ package com.vaidyalink.backend.controller;
 
 import com.vaidyalink.backend.entity.Doctor;
 import com.vaidyalink.backend.service.DoctorService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,7 +17,7 @@ public class DoctorController {
     }
 
     @PostMapping("/register")
-    public Doctor registerDoctor(@RequestBody Doctor doctor){
+    public Doctor registerDoctor(@Valid @RequestBody Doctor doctor){
         return doctorService.registerDoctor(doctor);
     }
 

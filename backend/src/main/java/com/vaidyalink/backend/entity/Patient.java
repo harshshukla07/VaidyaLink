@@ -1,10 +1,7 @@
 package com.vaidyalink.backend.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -29,7 +26,11 @@ public class Patient {
     @Column(unique = true, nullable = false)
     private String email;
 
+    @Pattern(regexp = "^[0-9]{10}$", message = "Mobile number must be exactly 10 digits")
+    @NotBlank(message = "Mobile number is required")
+    @Column(unique = true, nullable = false)
     private String mobile;
+
 
     private String gender;
 

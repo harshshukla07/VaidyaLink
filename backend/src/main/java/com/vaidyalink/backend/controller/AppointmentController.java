@@ -3,6 +3,7 @@ package com.vaidyalink.backend.controller;
 import com.vaidyalink.backend.dto.AppointmentRequest;
 import com.vaidyalink.backend.entity.Appointment;
 import com.vaidyalink.backend.service.AppointmentService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,7 +19,7 @@ public class AppointmentController {
     }
 
     @PostMapping("/book")
-    public Appointment bookAppointment(@RequestBody AppointmentRequest request){
+    public Appointment bookAppointment(@Valid @RequestBody AppointmentRequest request){
         return appointmentService.bookAppointment(request);
     }
 }

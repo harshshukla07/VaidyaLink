@@ -38,6 +38,11 @@ public class AppointmentServiceImpl implements AppointmentService{
         //Create new Appointment Object
         Appointment appointment = new Appointment();
 
+        boolean isSlotTaken = appointmentRepository.existsByDoctorIdAndAppointmentDate(request.getDoctorId(), request.getAppointmentDate());
+        if(isSlotTaken){
+            throw new IllegalStateException("Sorry, This slot for Dr." + doctor.getName() + " is already booked.");
+        }
+
         //Set data using setters
         appointment.setPatient(patient);
         appointment.setDoctor(doctor);
@@ -63,7 +68,14 @@ public class AppointmentServiceImpl implements AppointmentService{
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new RuntimeException("Appointment not found with ID: " + appointmentId));
 
-        appointment.setStatus(newStatus);
+
+        AppointmentStatus appointmentStatus = appointment.getStatus();
+        if(appointmentStatus == AppointmentStatus.CANCELLED || appointmentStatus == AppointmentStatus.COMPLETED){
+            throw new IllegalStateException("Appointment Status is Cancelled or Completed");
+        }
+        else{
+            appointment.setStatus(newStatus);
+        }
 
         return appointmentRepository.save(appointment);
     }

@@ -8,6 +8,10 @@ import com.vaidyalink.backend.entity.Patient;
 import com.vaidyalink.backend.repository.AppointmentRepository;
 import com.vaidyalink.backend.repository.DoctorRepository;
 import com.vaidyalink.backend.repository.PatientRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -52,14 +56,38 @@ public class AppointmentServiceImpl implements AppointmentService{
         return appointmentRepository.save(appointment);
     }
 
-    @Override
-    public List<Appointment> getAppointmentsByPatientId(Long patientId){
-        return appointmentRepository.findByPatientId(patientId);
-    }
+//    @Override
+//    public List<Appointment> getAppointmentsByPatientId(Long patientId){
+//        return appointmentRepository.findByPatientId(patientId);
+//    }
 
     @Override
-    public List<Appointment> getAppointmentsByDoctorId(Long doctorId){
-        return appointmentRepository.findByDoctorId(doctorId);
+    public Page<Appointment> getAppointmentsByPatientId(Long patientId, int pageNumber, int pageSize) {
+        Pageable pageable = PageRequest.of(
+                pageNumber,
+                pageSize,
+                Sort.by("appointmentDate").descending()
+        );
+
+        return appointmentRepository.findByPatientId(patientId, pageable);
+    }
+
+//    public Page<Appointment> getAppointmentsForDoctor(Long doctorId, int page, int size) {
+//        Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+//
+//        return appointmentRepository.findByDoctorId(doctorId, pageable);
+//    }
+
+//    @Override
+//    public List<Appointment> getAppointmentsByDoctorId(Long doctorId){
+//        return appointmentRepository.findByDoctorId(doctorId);
+//    }
+
+    @Override
+    public Page<Appointment> getAppointmentsByDoctorId(Long doctorId, int pageNumber, int pageSize) {
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("appointmentDate").descending());
+
+        return appointmentRepository.findByDoctorId(doctorId, pageable);
     }
 
     @Override

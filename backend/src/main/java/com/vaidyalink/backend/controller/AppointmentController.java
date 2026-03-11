@@ -5,6 +5,7 @@ import com.vaidyalink.backend.entity.Appointment;
 import com.vaidyalink.backend.entity.AppointmentStatus;
 import com.vaidyalink.backend.service.AppointmentService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,14 +24,32 @@ public class AppointmentController {
         return appointmentService.bookAppointment(request);
     }
 
+//    @GetMapping("/patient/{patientId}")
+//    public List<Appointment> getPatientAppointments(@PathVariable Long patientId) {
+//        return appointmentService.getAppointmentsByPatientId(patientId);
+//    }
+
     @GetMapping("/patient/{patientId}")
-    public List<Appointment> getPatientAppointments(@PathVariable Long patientId) {
-        return appointmentService.getAppointmentsByPatientId(patientId);
+    public Page<Appointment> getPatientAppointments(
+            @PathVariable Long patientId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        return appointmentService.getAppointmentsByPatientId(patientId, page, size);
     }
 
+//    @GetMapping("/doctor/{doctorId}")
+//    public List<Appointment> getDoctorAppointments(@PathVariable Long doctorId) {
+//        return appointmentService.getAppointmentsByDoctorId(doctorId);
+//    }
+
     @GetMapping("/doctor/{doctorId}")
-    public List<Appointment> getDoctorAppointments(@PathVariable Long doctorId) {
-        return appointmentService.getAppointmentsByDoctorId(doctorId);
+    public Page<Appointment> getDoctorAppointments(
+            @PathVariable Long doctorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        return appointmentService.getAppointmentsByDoctorId(doctorId, page, size);
     }
 
     @PatchMapping("/{appointmentId}/status")

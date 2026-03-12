@@ -10,6 +10,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 @RestController
@@ -55,5 +56,13 @@ public class AppointmentController {
             @RequestParam AppointmentStatus status) {
 
         return appointmentService.updateAppointmentStatus(appointmentId, status);
+    }
+
+    @GetMapping("/doctor/{doctorId}/available-slots")
+    public List<LocalTime> getAvailableSlots(
+            @PathVariable Long doctorId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+
+        return appointmentService.getAvailableSlots(doctorId, date);
     }
 }

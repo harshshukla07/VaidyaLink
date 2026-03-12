@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,6 +35,10 @@ public class AppointmentServiceImpl implements AppointmentService{
 
     @Override
     public Appointment bookAppointment(AppointmentRequest request){
+
+        LocalTime cleanTime = request.getAppointmentTime().truncatedTo(ChronoUnit.MINUTES);
+
+        request.setAppointmentTime(cleanTime);
 
         LocalDate today = LocalDate.now();
         LocalTime now = LocalTime.now();

@@ -26,4 +26,6 @@ public interface AppointmentService {
 
     List<LocalTime> getAvailableSlots(Long doctorId, LocalDate date);
 
+    Page<Appointment> searchAppointments(Long doctorId, String searchKey, int page, int size);
+
 }

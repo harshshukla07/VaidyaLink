@@ -13,9 +13,9 @@ import java.util.List;
 
 public interface AppointmentRepository extends JpaRepository<Appointment, Long> {
     List<Appointment> findByDoctor(Doctor doctor);
-//    List<Appointment> findByPatientId(Long patientId);
+
     Page<Appointment> findByPatientId(Long patientId, Pageable pageable);
-//    List<Appointment> findByDoctorId(Long doctorId);
+
     Page<Appointment> findByDoctorId(Long doctorId, Pageable pageable);
 
     Page<Appointment> findByDoctorIdAndAppointmentDate(Long doctorId, LocalDate appointmentDate, Pageable pageable);
@@ -24,4 +24,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     List<Appointment> findByDoctorIdAndAppointmentDateAndStatusNot(Long doctorId, LocalDate appointmentDate, AppointmentStatus status);
 
     boolean existsByDoctorIdAndAppointmentDateAndAppointmentTimeAndStatusNot(Long doctorId, LocalDate appointmentDate, LocalTime appointmentTime,  AppointmentStatus status);
+
+    Page<Appointment> findByDoctorIdAndPatientNameContainingIgnoreCase(Long doctorId, String patientName, Pageable pageable);
+
+    Page<Appointment> findByDoctorIdAndPatientMobile(Long doctorId, String patientMobile, Pageable pageable);
 }

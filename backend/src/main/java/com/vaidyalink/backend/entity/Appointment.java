@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 @Entity
 @Table(name = "appointments")
@@ -29,6 +30,9 @@ public class Appointment {
 
     @Column(nullable=false)
     private LocalDate appointmentDate;
+
+    @Column(nullable = false)
+    private LocalTime appointmentTime;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

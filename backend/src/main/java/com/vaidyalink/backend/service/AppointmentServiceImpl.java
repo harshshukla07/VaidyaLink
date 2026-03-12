@@ -14,6 +14,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 @Service
@@ -35,6 +37,21 @@ public class AppointmentServiceImpl implements AppointmentService{
 
     @Override
     public Appointment bookAppointment(AppointmentRequest request){
+
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+
+        if (request.getAppointmentDate().equals(today)) {
+            if (request.getAppointmentTime().isBefore(now)) {
+                throw new IllegalStateException("You cannot book a past time for today's date.");
+            }
+        }
+
+        int minutes = request.getAppointmentTime().getMinute();
+        if (minutes != 0 && minutes != 20 && minutes != 40) {
+            throw new IllegalStateException("Invalid slot! Appointments can only be booked at :00 or :20 or :40 minutes (e.g., 10:00, 10:20, 10:40).");
+        }
+
         //Fetching patient by id
         Patient patient = patientRepository.findById(request.getPatientId()).orElseThrow(()-> new RuntimeException("Patient Not Found with id: "+request.getPatientId()));
         //Fetching Doctor by id
@@ -42,7 +59,7 @@ public class AppointmentServiceImpl implements AppointmentService{
         //Create new Appointment Object
         Appointment appointment = new Appointment();
 
-        boolean isSlotTaken = appointmentRepository.existsByDoctorIdAndAppointmentDate(request.getDoctorId(), request.getAppointmentDate());
+        boolean isSlotTaken = appointmentRepository.existsByDoctorIdAndAppointmentDateAndAppointmentTime(request.getDoctorId(), request.getAppointmentDate(), request.getAppointmentTime());
         if(isSlotTaken){
             throw new IllegalStateException("Sorry, This slot for Dr." + doctor.getName() + " is already booked.");
         }
@@ -51,6 +68,7 @@ public class AppointmentServiceImpl implements AppointmentService{
         appointment.setPatient(patient);
         appointment.setDoctor(doctor);
         appointment.setAppointmentDate(request.getAppointmentDate());
+        appointment.setAppointmentTime(request.getAppointmentTime());
         appointment.setStatus(AppointmentStatus.PENDING);
 
         return appointmentRepository.save(appointment);
@@ -88,6 +106,13 @@ public class AppointmentServiceImpl implements AppointmentService{
         Pageable pageable = PageRequest.of(pageNumber, pageSize, Sort.by("appointmentDate").descending());
 
         return appointmentRepository.findByDoctorId(doctorId, pageable);
+    }
+
+    @Override
+    public Page<Appointment> getAppointmentsByDoctorAndDate(Long doctorId, LocalDate date, int page, int size){
+        Pageable pageable = PageRequest.of(page, size, Sort.by("appointmentTime").ascending());
+
+        return appointmentRepository.findByDoctorIdAndAppointmentDate(doctorId, date,pageable);
     }
 
     @Override

@@ -6,8 +6,10 @@ import com.vaidyalink.backend.entity.AppointmentStatus;
 import com.vaidyalink.backend.service.AppointmentService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -24,11 +26,6 @@ public class AppointmentController {
         return appointmentService.bookAppointment(request);
     }
 
-//    @GetMapping("/patient/{patientId}")
-//    public List<Appointment> getPatientAppointments(@PathVariable Long patientId) {
-//        return appointmentService.getAppointmentsByPatientId(patientId);
-//    }
-
     @GetMapping("/patient/{patientId}")
     public Page<Appointment> getPatientAppointments(
             @PathVariable Long patientId,
@@ -38,16 +35,16 @@ public class AppointmentController {
         return appointmentService.getAppointmentsByPatientId(patientId, page, size);
     }
 
-//    @GetMapping("/doctor/{doctorId}")
-//    public List<Appointment> getDoctorAppointments(@PathVariable Long doctorId) {
-//        return appointmentService.getAppointmentsByDoctorId(doctorId);
-//    }
-
     @GetMapping("/doctor/{doctorId}")
     public Page<Appointment> getDoctorAppointments(
             @PathVariable Long doctorId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
+
+        if (date != null) {
+            return appointmentService.getAppointmentsByDoctorAndDate(doctorId, date, page, size);
+        }
 
         return appointmentService.getAppointmentsByDoctorId(doctorId, page, size);
     }

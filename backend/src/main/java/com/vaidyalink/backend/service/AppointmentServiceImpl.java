@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -30,13 +32,13 @@ public class AppointmentServiceImpl implements AppointmentService{
         this.doctorRepository = doctorRepository;
     }
 
-//    @Override
-//    public Appointment bookAppointment(Appointment appointment){
-//        return appointmentRepository.save(appointment);
-//    }
 
     @Override
     public Appointment bookAppointment(AppointmentRequest request){
+
+        LocalTime cleanTime = request.getAppointmentTime().truncatedTo(ChronoUnit.MINUTES);
+
+        request.setAppointmentTime(cleanTime);
 
         LocalDate today = LocalDate.now();
         LocalTime now = LocalTime.now();
@@ -59,7 +61,7 @@ public class AppointmentServiceImpl implements AppointmentService{
         //Create new Appointment Object
         Appointment appointment = new Appointment();
 
-        boolean isSlotTaken = appointmentRepository.existsByDoctorIdAndAppointmentDateAndAppointmentTime(request.getDoctorId(), request.getAppointmentDate(), request.getAppointmentTime());
+        boolean isSlotTaken = appointmentRepository.existsByDoctorIdAndAppointmentDateAndAppointmentTimeAndStatusNot(request.getDoctorId(), request.getAppointmentDate(), request.getAppointmentTime(), AppointmentStatus.CANCELLED);
         if(isSlotTaken){
             throw new IllegalStateException("Sorry, This slot for Dr." + doctor.getName() + " is already booked.");
         }
@@ -74,10 +76,6 @@ public class AppointmentServiceImpl implements AppointmentService{
         return appointmentRepository.save(appointment);
     }
 
-//    @Override
-//    public List<Appointment> getAppointmentsByPatientId(Long patientId){
-//        return appointmentRepository.findByPatientId(patientId);
-//    }
 
     @Override
     public Page<Appointment> getAppointmentsByPatientId(Long patientId, int pageNumber, int pageSize) {
@@ -89,17 +87,6 @@ public class AppointmentServiceImpl implements AppointmentService{
 
         return appointmentRepository.findByPatientId(patientId, pageable);
     }
-
-//    public Page<Appointment> getAppointmentsForDoctor(Long doctorId, int page, int size) {
-//        Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
-//
-//        return appointmentRepository.findByDoctorId(doctorId, pageable);
-//    }
-
-//    @Override
-//    public List<Appointment> getAppointmentsByDoctorId(Long doctorId){
-//        return appointmentRepository.findByDoctorId(doctorId);
-//    }
 
     @Override
     public Page<Appointment> getAppointmentsByDoctorId(Long doctorId, int pageNumber, int pageSize) {
@@ -131,6 +118,45 @@ public class AppointmentServiceImpl implements AppointmentService{
         }
 
         return appointmentRepository.save(appointment);
+    }
+
+    @Override
+    public List<LocalTime> getAvailableSlots(Long doctorId, LocalDate date) {
+
+        List<LocalTime> availableSlots = new ArrayList<>();
+
+        // SHIFT 1: Morning OPD (10:00 AM to 1:00 PM)
+        LocalTime morningStart = LocalTime.of(10, 0);
+        LocalTime morningEnd = LocalTime.of(13, 0);
+
+        while (morningStart.isBefore(morningEnd)) {
+            availableSlots.add(morningStart);
+            morningStart = morningStart.plusMinutes(20);
+        }
+
+        // SHIFT 2: Evening OPD (6:00 PM to 9:00 PM)
+        LocalTime eveningStart = LocalTime.of(18, 0);
+        LocalTime eveningEnd = LocalTime.of(21, 0);
+
+        while (eveningStart.isBefore(eveningEnd)) {
+            availableSlots.add(eveningStart);
+            eveningStart = eveningStart.plusMinutes(20);
+        }
+
+        List<Appointment> bookedAppointments = appointmentRepository.findByDoctorIdAndAppointmentDateAndStatusNot(doctorId, date, AppointmentStatus.CANCELLED);
+
+        List<LocalTime> bookedTimes = bookedAppointments.stream()
+                .map(Appointment::getAppointmentTime)
+                .toList();
+
+        availableSlots.removeAll(bookedTimes);
+
+        if (date.equals(LocalDate.now())) {
+            LocalTime now = LocalTime.now();
+            availableSlots.removeIf(slot -> slot.isBefore(now));
+        }
+
+        return availableSlots;
     }
 
 

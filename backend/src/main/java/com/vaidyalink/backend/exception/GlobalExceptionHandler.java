@@ -66,4 +66,28 @@ public class GlobalExceptionHandler {
 
         return error;
     }
+
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    @ExceptionHandler(jakarta.persistence.EntityNotFoundException.class)
+    public Map<String, String> handleNotFound(jakarta.persistence.EntityNotFoundException ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", ex.getMessage());
+        return error;
+    }
+
+    @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public Map<String, String> handleMethodNotSupported(org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "This method is not supported for this endpoint. " + ex.getMessage());
+        return error;
+    }
+
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    @ExceptionHandler(Exception.class)
+    public Map<String, String> handleGlobalException(Exception ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "An unexpected error occurred. Please try again later.");
+        return error;
+    }
 }

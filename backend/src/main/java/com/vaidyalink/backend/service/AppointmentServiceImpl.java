@@ -159,5 +159,18 @@ public class AppointmentServiceImpl implements AppointmentService{
         return availableSlots;
     }
 
+    @Override
+    public Page<Appointment> searchAppointments(Long doctorId, String searchKey, int page, int size) {
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by("appointmentDate").descending().and(Sort.by("appointmentTime").descending()));
+
+        if (searchKey.matches("^[0-9]{10}$")) {
+            return appointmentRepository.findByDoctorIdAndPatientMobile(doctorId, searchKey, pageable);
+        }
+        else {
+            return appointmentRepository.findByDoctorIdAndPatientNameContainingIgnoreCase(doctorId, searchKey, pageable);
+        }
+    }
+
 
 }

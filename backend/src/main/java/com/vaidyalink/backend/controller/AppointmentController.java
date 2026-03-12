@@ -65,4 +65,14 @@ public class AppointmentController {
 
         return appointmentService.getAvailableSlots(doctorId, date);
     }
+
+    @GetMapping("/doctor/{doctorId}/search")
+    public Page<Appointment> searchDoctorAppointments(
+            @PathVariable Long doctorId,
+            @RequestParam String query,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        return appointmentService.searchAppointments(doctorId, query, page, size);
+    }
 }

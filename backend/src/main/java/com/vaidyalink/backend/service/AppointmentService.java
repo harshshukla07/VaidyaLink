@@ -28,4 +28,6 @@ public interface AppointmentService {
 
     Page<Appointment> searchAppointments(Long doctorId, String searchKey, int page, int size);
 
+    Page<Appointment> getUpcomingAppointmentsForPatient(Long patientId, int page, int size);
+
 }

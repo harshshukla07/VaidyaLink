@@ -172,5 +172,27 @@ public class AppointmentServiceImpl implements AppointmentService{
         }
     }
 
+    @Override
+    public Page<Appointment> getUpcomingAppointmentsForPatient(Long patientId, int page, int size) {
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now().truncatedTo(ChronoUnit.MINUTES);
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by("appointmentDate").ascending()
+                        .and(Sort.by("appointmentTime").ascending())
+        );
+
+        return appointmentRepository.findUpcomingAppointmentsForPatient(
+                patientId,
+                today,
+                now,
+                List.of(AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED),
+                pageable
+        );
+    }
+
+
 
 }

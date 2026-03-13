@@ -75,4 +75,13 @@ public class AppointmentController {
 
         return appointmentService.searchAppointments(doctorId, query, page, size);
     }
+
+    @GetMapping("/patient/{patientId}/upcoming")
+    public Page<Appointment> getUpcomingPatientAppointments(
+            @PathVariable Long patientId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        return appointmentService.getUpcomingAppointmentsForPatient(patientId, page, size);
+    }
 }

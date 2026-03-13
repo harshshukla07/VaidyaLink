@@ -6,6 +6,8 @@ import com.vaidyalink.backend.entity.Doctor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -28,4 +30,23 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     Page<Appointment> findByDoctorIdAndPatientNameContainingIgnoreCase(Long doctorId, String patientName, Pageable pageable);
 
     Page<Appointment> findByDoctorIdAndPatientMobile(Long doctorId, String patientMobile, Pageable pageable);
+
+    @Query("""
+    SELECT a
+    FROM Appointment a
+    WHERE a.patient.id = :patientId
+      AND a.status IN :activeStatuses
+      AND (
+            a.appointmentDate > :today
+            OR (a.appointmentDate = :today AND a.appointmentTime >= :now)
+          )
+    """)
+    Page<Appointment> findUpcomingAppointmentsForPatient(
+            @Param("patientId") Long patientId,
+            @Param("today") LocalDate today,
+            @Param("now") LocalTime now,
+            @Param("activeStatuses") List<AppointmentStatus> activeStatuses,
+            Pageable pageable
+    );
+
 }

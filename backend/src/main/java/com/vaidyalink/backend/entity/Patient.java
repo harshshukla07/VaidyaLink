@@ -36,4 +36,7 @@ public class Patient {
 
     @Min(value=0, message = "Age cannot be negative")
     private Integer age;
+
+    private String password;
+
 }

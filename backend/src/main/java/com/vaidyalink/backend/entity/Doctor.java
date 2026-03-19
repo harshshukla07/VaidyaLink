@@ -35,4 +35,7 @@ public class Doctor {
 
     @Min(value=0, message = "Experience cannot be negative")
     private Integer experience;
+
+    private String password;
+
 }

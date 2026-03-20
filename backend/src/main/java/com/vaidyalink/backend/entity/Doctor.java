@@ -7,7 +7,6 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.apache.logging.log4j.message.Message;
 
 @Entity
 @Table(name="doctors")
@@ -36,6 +35,7 @@ public class Doctor {
     @Min(value=0, message = "Experience cannot be negative")
     private Integer experience;
 
+    @Column(nullable = false)
     private String password;
 
 }

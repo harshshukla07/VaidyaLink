@@ -123,6 +123,9 @@ public class AppointmentServiceImpl implements AppointmentService{
     @Override
     public List<LocalTime> getAvailableSlots(Long doctorId, LocalDate date) {
 
+        doctorRepository.findById(doctorId)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Doctor not found with ID: " + doctorId));
+
         List<LocalTime> availableSlots = new ArrayList<>();
 
         // SHIFT 1: Morning OPD (10:00 AM to 1:00 PM)

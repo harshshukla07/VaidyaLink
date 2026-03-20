@@ -92,9 +92,11 @@ public class AuthController {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             String jwt = jwtUtil.generateToken(loginRequest.getEmail());
+            String role = authentication.getAuthorities().iterator().next().getAuthority();
 
             Map<String, String> response = new HashMap<>();
             response.put("token", jwt);
+            response.put("role", role);
             response.put("message", "Login successful");
 
             return ResponseEntity.ok(response);

@@ -90,4 +90,12 @@ public class GlobalExceptionHandler {
         error.put("error", "An unexpected error occurred. Please try again later.");
         return error;
     }
+
+    @ResponseStatus(HttpStatus.FORBIDDEN) // 403 Status Code
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public Map<String, String> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "Access Denied: You do not have the required role to perform this action.");
+        return error;
+    }
 }

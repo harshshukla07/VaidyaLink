@@ -22,7 +22,7 @@ public class Patient {
     private String name;
 
     @Email(message="Please provide a valid email address")
-    @NotEmpty(message="Email is required")
+    @NotBlank(message="Email is required")
     @Column(unique = true, nullable = false)
     private String email;
 
@@ -37,6 +37,7 @@ public class Patient {
     @Min(value=0, message = "Age cannot be negative")
     private Integer age;
 
+    @Column(nullable = false)
     private String password;
 
 }

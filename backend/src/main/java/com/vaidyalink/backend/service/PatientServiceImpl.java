@@ -2,7 +2,10 @@ package com.vaidyalink.backend.service;
 
 import com.vaidyalink.backend.entity.Patient;
 import com.vaidyalink.backend.repository.PatientRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class PatientServiceImpl implements PatientService {
@@ -14,12 +17,12 @@ public class PatientServiceImpl implements PatientService {
     }
 
     @Override
-    public Patient registerPatient(Patient patient) {
-        return patientRepository.save(patient);
+    public Patient getPatientById(Long id){
+        return patientRepository.findById(id).orElseThrow(()-> new EntityNotFoundException("No patient found with this particular Id: " + id));
     }
 
     @Override
-    public Patient getPatientById(Long id){
-        return patientRepository.findById(id).orElseThrow(()-> new RuntimeException("No patient found with this particular Id: "+id));
+    public List<Patient> getAllPatients() {
+        return patientRepository.findAll();
     }
 }

@@ -5,6 +5,8 @@ import com.vaidyalink.backend.entity.Doctor;
 import java.util.List;
 
 public interface DoctorService {
-    Doctor registerDoctor(Doctor doctor);
+
     List<Doctor> getDoctorsBySpeciality(String speciality);
+    List<Doctor> getAllDoctors();
+    Doctor getDoctorById(Long id);
 }

@@ -2,8 +2,11 @@ package com.vaidyalink.backend.service;
 
 import com.vaidyalink.backend.entity.Patient;
 
+import java.util.List;
+
 public interface PatientService {
-    Patient registerPatient(Patient patient);
 
     Patient getPatientById(Long id);
+
+    List<Patient> getAllPatients();
 }

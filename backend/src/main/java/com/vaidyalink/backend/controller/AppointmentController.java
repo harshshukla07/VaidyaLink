@@ -7,6 +7,8 @@ import com.vaidyalink.backend.service.AppointmentService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -23,65 +25,73 @@ public class AppointmentController {
     }
 
     @PostMapping("/book")
-    public Appointment bookAppointment(@Valid @RequestBody AppointmentRequest request){
-        return appointmentService.bookAppointment(request);
+    public ResponseEntity<Appointment> bookAppointment(@Valid @RequestBody AppointmentRequest request){
+        Appointment appointment = appointmentService.bookAppointment(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(appointment);
     }
 
     @GetMapping("/patient/{patientId}")
-    public Page<Appointment> getPatientAppointments(
+    public ResponseEntity<Page<Appointment>> getPatientAppointments(
             @PathVariable Long patientId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        return appointmentService.getAppointmentsByPatientId(patientId, page, size);
+        Page<Appointment> appointments = appointmentService.getAppointmentsByPatientId(patientId, page, size);
+        return ResponseEntity.ok(appointments);
     }
 
     @GetMapping("/doctor/{doctorId}")
-    public Page<Appointment> getDoctorAppointments(
+    public ResponseEntity<Page<Appointment>> getDoctorAppointments(
             @PathVariable Long doctorId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
         if (date != null) {
-            return appointmentService.getAppointmentsByDoctorAndDate(doctorId, date, page, size);
+            Page<Appointment> appointments = appointmentService.getAppointmentsByDoctorAndDate(doctorId, date, page, size);
+            return ResponseEntity.ok(appointments);
         }
 
-        return appointmentService.getAppointmentsByDoctorId(doctorId, page, size);
+        Page<Appointment> appointments = appointmentService.getAppointmentsByDoctorId(doctorId, page, size);
+        return ResponseEntity.ok(appointments);
     }
 
     @PatchMapping("/{appointmentId}/status")
-    public Appointment updateStatus(
+    public ResponseEntity<Appointment> updateStatus(
             @PathVariable Long appointmentId,
             @RequestParam AppointmentStatus status) {
 
-        return appointmentService.updateAppointmentStatus(appointmentId, status);
+        Appointment appointment = appointmentService.updateAppointmentStatus(appointmentId, status);
+        return ResponseEntity.ok(appointment);
     }
 
     @GetMapping("/doctor/{doctorId}/available-slots")
-    public List<LocalTime> getAvailableSlots(
+    public ResponseEntity<List<LocalTime>> getAvailableSlots(
             @PathVariable Long doctorId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
 
-        return appointmentService.getAvailableSlots(doctorId, date);
+        List<LocalTime> slots = appointmentService.getAvailableSlots(doctorId, date);
+        return ResponseEntity.ok(slots);
     }
 
     @GetMapping("/doctor/{doctorId}/search")
-    public Page<Appointment> searchDoctorAppointments(
+    public ResponseEntity<Page<Appointment>> searchDoctorAppointments(
             @PathVariable Long doctorId,
             @RequestParam String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        return appointmentService.searchAppointments(doctorId, query, page, size);
+        Page<Appointment> appointments = appointmentService.searchAppointments(doctorId, query, page, size);
+        return ResponseEntity.ok(appointments);
     }
 
     @GetMapping("/patient/{patientId}/upcoming")
-    public Page<Appointment> getUpcomingPatientAppointments(
+    public ResponseEntity<Page<Appointment>> getUpcomingPatientAppointments(
             @PathVariable Long patientId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        return appointmentService.getUpcomingAppointmentsForPatient(patientId, page, size);
+        Page<Appointment> appointments = appointmentService.getUpcomingAppointmentsForPatient(patientId, page, size);
+        return ResponseEntity.ok(appointments);
     }
 }

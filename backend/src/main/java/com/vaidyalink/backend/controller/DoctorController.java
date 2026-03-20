@@ -1,8 +1,9 @@
 package com.vaidyalink.backend.controller;
 
 import com.vaidyalink.backend.entity.Doctor;
+import com.vaidyalink.backend.entity.Patient;
 import com.vaidyalink.backend.service.DoctorService;
-import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,13 +17,21 @@ public class DoctorController {
         this.doctorService = doctorService;
     }
 
-    @PostMapping("/register")
-    public Doctor registerDoctor(@Valid @RequestBody Doctor doctor){
-        return doctorService.registerDoctor(doctor);
+    @GetMapping
+    public ResponseEntity<List<Doctor>> getDoctorsBySpeciality(@RequestParam String speciality){
+        List<Doctor> doctors = doctorService.getDoctorsBySpeciality(speciality);
+        return ResponseEntity.ok(doctors);
     }
 
-    @GetMapping
-    public List<Doctor> getDoctorsBySpeciality(@RequestParam String speciality){
-        return doctorService.getDoctorsBySpeciality(speciality);
+    @GetMapping("/{id}")
+    public ResponseEntity<Doctor> getDoctorById(@PathVariable Long id){
+        Doctor doctor = doctorService.getDoctorById(id);
+        return ResponseEntity.ok(doctor);
+    }
+
+    @GetMapping("/all")
+    public ResponseEntity<List<Doctor>> getAllDoctors() {
+        List<Doctor> doctors = doctorService.getAllDoctors();
+        return ResponseEntity.ok(doctors);
     }
 }

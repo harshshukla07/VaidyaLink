@@ -41,17 +41,14 @@ public class AuthController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    // 1. Patient Registration API
     @PostMapping("/register/patient")
     public ResponseEntity<?> registerPatient(@Valid @RequestBody PatientRegisterRequest request) {
 
-        // Pehle check karo ki email already exist toh nahi karta
         if (patientRepository.findByEmail(request.getEmail()).isPresent() ||
                 doctorRepository.findByEmail(request.getEmail()).isPresent()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: Email is already registered!");
         }
 
-        // DTO se data nikal kar Entity mein daalo
         Patient patient = new Patient();
         patient.setName(request.getName());
         patient.setEmail(request.getEmail());
@@ -59,14 +56,12 @@ public class AuthController {
         patient.setGender(request.getGender());
         patient.setAge(request.getAge());
 
-        // SDE Rule: Password hamesha encrypt karke save hoga!
         patient.setPassword(passwordEncoder.encode(request.getPassword()));
 
         patientRepository.save(patient);
         return ResponseEntity.ok("Patient registered successfully!");
     }
 
-    // 2. Doctor Registration API
     @PostMapping("/register/doctor")
     public ResponseEntity<?> registerDoctor(@Valid @RequestBody DoctorRegisterRequest request) {
 
@@ -81,29 +76,23 @@ public class AuthController {
         doctor.setSpeciality(request.getSpeciality());
         doctor.setExperience(request.getExperience());
 
-        // SDE Rule: Encrypt the password
         doctor.setPassword(passwordEncoder.encode(request.getPassword()));
 
         doctorRepository.save(doctor);
         return ResponseEntity.ok("Doctor registered successfully!");
     }
 
-    // 3. The Login API (Generates Token)
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         try {
-            // Spring Security ko bolo: "Bhai, ye email aur password check karke bata DB mein hai ya nahi"
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
             );
 
-            // Agar yahan tak code aa gaya, matlab credentials sahi hain. Security Context set karo.
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // Token generate karo
             String jwt = jwtUtil.generateToken(loginRequest.getEmail());
 
-            // Token ko JSON format mein return karo
             Map<String, String> response = new HashMap<>();
             response.put("token", jwt);
             response.put("message", "Login successful");
@@ -111,7 +100,6 @@ public class AuthController {
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            // Agar password galat hua ya email nahi mila, toh 401 Unauthorized de do
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Error: Invalid email or password");
         }
     }

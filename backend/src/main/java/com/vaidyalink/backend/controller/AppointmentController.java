@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -24,12 +25,14 @@ public class AppointmentController {
         this.appointmentService = appointmentService;
     }
 
+    @PreAuthorize("hasRole('PATIENT')")
     @PostMapping("/book")
     public ResponseEntity<Appointment> bookAppointment(@Valid @RequestBody AppointmentRequest request){
         Appointment appointment = appointmentService.bookAppointment(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(appointment);
     }
 
+    @PreAuthorize("hasAnyRole('PATIENT', 'DOCTOR')")
     @GetMapping("/patient/{patientId}")
     public ResponseEntity<Page<Appointment>> getPatientAppointments(
             @PathVariable Long patientId,
@@ -40,6 +43,7 @@ public class AppointmentController {
         return ResponseEntity.ok(appointments);
     }
 
+    @PreAuthorize("hasRole('DOCTOR')")
     @GetMapping("/doctor/{doctorId}")
     public ResponseEntity<Page<Appointment>> getDoctorAppointments(
             @PathVariable Long doctorId,
@@ -56,6 +60,7 @@ public class AppointmentController {
         return ResponseEntity.ok(appointments);
     }
 
+    @PreAuthorize("hasAnyRole('PATIENT', 'DOCTOR')")
     @PatchMapping("/{appointmentId}/status")
     public ResponseEntity<Appointment> updateStatus(
             @PathVariable Long appointmentId,
@@ -65,6 +70,7 @@ public class AppointmentController {
         return ResponseEntity.ok(appointment);
     }
 
+    @PreAuthorize("hasAnyRole('PATIENT', 'DOCTOR')")
     @GetMapping("/doctor/{doctorId}/available-slots")
     public ResponseEntity<List<LocalTime>> getAvailableSlots(
             @PathVariable Long doctorId,
@@ -74,6 +80,7 @@ public class AppointmentController {
         return ResponseEntity.ok(slots);
     }
 
+    @PreAuthorize("hasRole('DOCTOR')")
     @GetMapping("/doctor/{doctorId}/search")
     public ResponseEntity<Page<Appointment>> searchDoctorAppointments(
             @PathVariable Long doctorId,
@@ -85,6 +92,7 @@ public class AppointmentController {
         return ResponseEntity.ok(appointments);
     }
 
+    @PreAuthorize("hasRole('PATIENT')")
     @GetMapping("/patient/{patientId}/upcoming")
     public ResponseEntity<Page<Appointment>> getUpcomingPatientAppointments(
             @PathVariable Long patientId,

@@ -1,5 +1,6 @@
 package com.vaidyalink.backend.controller;
 
+import com.vaidyalink.backend.dto.PatientResponse;
 import com.vaidyalink.backend.entity.Patient;
 import com.vaidyalink.backend.service.PatientService;
 import org.springframework.http.ResponseEntity;
@@ -19,15 +20,19 @@ public class PatientController {
 
     @PreAuthorize("hasAnyRole('PATIENT', 'DOCTOR')")
     @GetMapping("/{id}")
-    public ResponseEntity<Patient> getPatientById(@PathVariable Long id){
+    public ResponseEntity<PatientResponse> getPatientById(@PathVariable Long id){
         Patient patient = patientService.getPatientById(id);
-        return ResponseEntity.ok(patient);
+        PatientResponse response = new PatientResponse(patient.getId(), patient.getName(), patient.getEmail(), patient.getMobile(), patient.getGender(), patient.getAge());
+        return ResponseEntity.ok(response);
     }
 
     @PreAuthorize("hasRole('DOCTOR')")
     @GetMapping("/all")
-    public ResponseEntity<List<Patient>> getAllPatients() {
+    public ResponseEntity<List<PatientResponse>> getAllPatients() {
         List<Patient> patients = patientService.getAllPatients();
-        return ResponseEntity.ok(patients);
+        List<PatientResponse> responseList = patients.stream()
+                .map(p -> new PatientResponse(p.getId(), p.getName(), p.getEmail(), p.getMobile(), p.getGender(), p.getAge()))
+                .toList();
+        return ResponseEntity.ok(responseList);
     }
 }

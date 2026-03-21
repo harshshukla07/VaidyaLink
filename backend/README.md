@@ -4,34 +4,37 @@
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.2-brightgreen)
 ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791)
 ![Build](https://img.shields.io/badge/Build-Maven-C71A36)
+![Security](https://img.shields.io/badge/Auth-JWT-orange)
 
-Spring Boot backend for a healthcare appointment platform where patients can register, discover doctors by speciality, and book/manage appointments.
+Backend service for a healthcare appointment platform where patients and doctors authenticate via JWT, access role-protected APIs, and manage appointments with business-rule enforcement.
 
-## Quick Navigation
+## Table of Contents
 
-- [Current Features](#current-features)
+- [Implemented Scope](#implemented-scope)
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
-- [Project Structure](#project-structure)
+- [Security Model](#security-model)
 - [Data Model](#data-model)
-- [Validation and Business Rules](#validation-and-business-rules)
+- [Validation and Rules](#validation-and-rules)
 - [API Endpoints](#api-endpoints)
-- [Sample Payloads](#sample-payloads)
+- [Sample Requests](#sample-requests)
 - [Error Handling](#error-handling)
 - [Configuration](#configuration)
 - [Run Locally](#run-locally)
+- [Troubleshooting Notes](#troubleshooting-notes)
 
-## Current Features
+## Implemented Scope
 
-- Patient registration and patient lookup by ID
-- Doctor registration and doctor filtering by speciality
-- Appointment booking using DTO (`patientId`, `doctorId`, `appointmentDate`, `appointmentTime`)
-- Appointment status updates (`PENDING`, `CONFIRMED`, `CANCELLED`, `COMPLETED`)
-- Appointment listing with pagination for patient and doctor
-- Available-slot helper for doctor/day
-- Doctor appointment search by patient name/mobile
-- Upcoming appointments API for patients
-- Validation and centralized exception handling
+- JWT-based authentication and role extraction (`ROLE_PATIENT`, `ROLE_DOCTOR`)
+- Public auth endpoints for registration and login
+- Protected patient and doctor read APIs
+- Appointment booking with conflict prevention and time validation
+- Appointment listing by patient/doctor with pagination
+- Date-filtered doctor appointment retrieval
+- Appointment status updates with terminal-state guardrails
+- Available-slot generation for doctor/day
+- Doctor-side appointment search by patient name/mobile
+- Patient-side upcoming appointments API
 
 ## Tech Stack
 
@@ -39,148 +42,191 @@ Spring Boot backend for a healthcare appointment platform where patients can reg
 - Spring Boot 4.0.2
 - Spring Web MVC
 - Spring Data JPA
+- Spring Security
+- Jakarta Bean Validation
+- JJWT (`jjwt-api`, `jjwt-impl`, `jjwt-jackson`)
 - PostgreSQL
-- Jakarta Validation (`spring-boot-starter-validation`)
 - Lombok
+- Springdoc OpenAPI (Swagger UI)
 - Maven
 
 ## Architecture
 
-```
+```text
 Controller -> Service -> Repository -> PostgreSQL
 ```
 
-- `controller`: receives HTTP requests and returns JSON responses
-- `service`: business logic and orchestration
-- `repository`: query abstraction using Spring Data JPA
-- `entity`: JPA models mapped to tables
-- `dto`: controlled request contracts (e.g., booking input)
-- `exception`: centralized API error shaping
+- `controller`: accepts HTTP requests and returns API responses
+- `service`: applies domain/business rules
+- `repository`: query abstraction through Spring Data JPA
+- `entity`: relational table mappings
+- `dto`: request/response contracts (`AppointmentRequest`, register/login DTOs)
+- `security`: JWT utility, auth filter, user loading, access config
+- `exception`: centralized JSON error responses
 
-## Project Structure
+## Security Model
 
-```
-src/main/java/com/vaidyalink/backend/
-  controller/
-  service/
-  repository/
-  entity/
-  dto/
-  exception/
-src/main/resources/
-  application.yml
-  application-dev.yml
-```
+### Authentication
+
+- Login endpoint returns a JWT token and caller role.
+- Token is expected in `Authorization: Bearer <token>`.
+- App is stateless (`SessionCreationPolicy.STATELESS`).
+
+### Authorization
+
+- Public routes:
+  - `/api/auth/**`
+  - `/v3/api-docs/**`, `/swagger-ui/**`, `/swagger-ui.html`
+- All other endpoints require authentication.
+- Method-level role checks are enabled via `@EnableMethodSecurity` + `@PreAuthorize`.
+
+### CORS
+
+Configured allowed origins:
+
+- `http://localhost:3000`
+- `http://localhost:5173`
+
+Allowed methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`.
 
 ## Data Model
 
 ### `Patient`
+
 - `id` (Long, PK)
 - `name`
 - `email` (unique)
 - `mobile` (unique)
 - `gender`
 - `age`
+- `password` (BCrypt-hashed)
 
 ### `Doctor`
+
 - `id` (Long, PK)
 - `name`
 - `email` (unique)
 - `speciality`
 - `experience`
+- `password` (BCrypt-hashed)
 
 ### `Appointment`
+
 - `id` (Long, PK)
-- `patient` (`@ManyToOne`)
-- `doctor` (`@ManyToOne`)
+- `patient` (`@ManyToOne` -> `patient_id`)
+- `doctor` (`@ManyToOne` -> `doctor_id`)
 - `appointmentDate` (`LocalDate`)
 - `appointmentTime` (`LocalTime`)
 - `status` (`AppointmentStatus` enum)
 
-## Validation and Business Rules
+## Validation and Rules
 
-### Validation
+### Request Validation
 
-- Patient:
-  - `name`: required
-  - `email`: required + valid format
-  - `mobile`: required + exactly 10 digits
-  - `age`: must be `>= 0`
-- Doctor:
-  - `name`: required
-  - `email`: required + valid format
-  - `speciality`: required
-  - `experience`: must be `>= 0`
-- Appointment request:
-  - `appointmentDate`: future or present
-  - `appointmentTime`: required
+- Patient registration DTO:
+  - name required
+  - email required + valid format
+  - mobile required + exact 10 digits
+  - age must be `>= 0`
+  - password required
+- Doctor registration DTO:
+  - name required
+  - email required + valid format
+  - speciality required
+  - experience must be `>= 0`
+  - password required
+- Appointment request DTO:
+  - date must be present or future
+  - time required
 
-### Booking and Status Rules
+### Appointment Booking Rules
 
-- Backend sets default booking status to `PENDING`
-- Slot granularity is fixed to 20-minute boundaries (`:00`, `:20`, `:40`)
-- Booking past time for today is blocked
-- Same doctor cannot be double-booked for same date/time (excluding cancelled)
-- Closed statuses (`CANCELLED`, `COMPLETED`) are protected from invalid updates
+- Appointment time is normalized to minute precision.
+- Same-day past time booking is blocked.
+- Allowed minute boundaries are fixed to `:00`, `:20`, `:40`.
+- Slot conflict check blocks duplicate doctor/date/time bookings (except cancelled).
+- Backend enforces initial status as `PENDING`.
+
+### Status Transition Guard
+
+- If current status is `CANCELLED` or `COMPLETED`, status update is rejected.
 
 ## API Endpoints
 
-Base paths:
-- `/api/patients`
-- `/api/doctors`
-- `/api/appointments`
+### Auth (`/api/auth`)
 
-### Patient
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `POST` | `/api/auth/register/patient` | Public | Register patient |
+| `POST` | `/api/auth/register/doctor` | Public | Register doctor |
+| `POST` | `/api/auth/login` | Public | Authenticate and receive JWT |
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `POST` | `/api/patients/register` | Register patient |
-| `GET` | `/api/patients/{id}` | Fetch patient by ID |
+### Patients (`/api/patients`)
 
-### Doctor
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/api/patients/{id}` | `PATIENT`, `DOCTOR` | Get patient by ID |
+| `GET` | `/api/patients/all` | `DOCTOR` | List all patients |
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `POST` | `/api/doctors/register` | Register doctor |
-| `GET` | `/api/doctors?speciality=Cardiologist` | List doctors by speciality |
+### Doctors (`/api/doctors`)
 
-### Appointment
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/api/doctors/{id}` | `PATIENT`, `DOCTOR` | Get doctor by ID |
+| `GET` | `/api/doctors?speciality=Cardiologist` | `PATIENT`, `DOCTOR` | Filter by speciality |
+| `GET` | `/api/doctors/all` | `PATIENT`, `DOCTOR` | List all doctors |
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `POST` | `/api/appointments/book` | Book appointment |
-| `GET` | `/api/appointments/patient/{patientId}?page=0&size=10` | Patient appointments (paged) |
-| `GET` | `/api/appointments/patient/{patientId}/upcoming?page=0&size=10` | Upcoming patient appointments |
-| `GET` | `/api/appointments/doctor/{doctorId}?page=0&size=10` | Doctor appointments (paged) |
-| `GET` | `/api/appointments/doctor/{doctorId}?date=2026-03-14&page=0&size=10` | Doctor appointments by date |
-| `PATCH` | `/api/appointments/{appointmentId}/status?status=CONFIRMED` | Update appointment status |
-| `GET` | `/api/appointments/doctor/{doctorId}/available-slots?date=2026-03-14` | Available slots for a date |
-| `GET` | `/api/appointments/doctor/{doctorId}/search?query=rahul&page=0&size=10` | Search doctor appointments |
+### Appointments (`/api/appointments`)
 
-## Sample Payloads
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `POST` | `/api/appointments/book` | `PATIENT` | Book appointment |
+| `GET` | `/api/appointments/patient/{patientId}?page=0&size=10` | `PATIENT`, `DOCTOR` | Patient appointments (paged) |
+| `GET` | `/api/appointments/patient/{patientId}/upcoming?page=0&size=10` | `PATIENT` | Upcoming patient appointments |
+| `GET` | `/api/appointments/doctor/{doctorId}?page=0&size=10` | `DOCTOR` | Doctor appointments (paged) |
+| `GET` | `/api/appointments/doctor/{doctorId}?date=2026-03-14&page=0&size=10` | `DOCTOR` | Doctor appointments by date |
+| `PATCH` | `/api/appointments/{appointmentId}/status?status=CONFIRMED` | `PATIENT`, `DOCTOR` | Update appointment status |
+| `GET` | `/api/appointments/doctor/{doctorId}/available-slots?date=2026-03-14` | `PATIENT`, `DOCTOR` | Get available slots |
+| `GET` | `/api/appointments/doctor/{doctorId}/search?query=rahul&page=0&size=10` | `DOCTOR` | Search appointments |
+
+## Sample Requests
 
 ### Register patient
+
 ```json
 {
   "name": "Rahul Sharma",
   "email": "rahul@example.com",
   "mobile": "9876543210",
   "gender": "Male",
-  "age": 27
+  "age": 27,
+  "password": "rahul@123"
 }
 ```
 
 ### Register doctor
+
 ```json
 {
   "name": "Dr. Mehta",
   "email": "mehta@example.com",
   "speciality": "Cardiologist",
-  "experience": 10
+  "experience": 10,
+  "password": "mehta@123"
+}
+```
+
+### Login
+
+```json
+{
+  "email": "rahul@example.com",
+  "password": "rahul@123"
 }
 ```
 
 ### Book appointment
+
 ```json
 {
   "patientId": 5,
@@ -192,7 +238,7 @@ Base paths:
 
 ## Error Handling
 
-`GlobalExceptionHandler` currently maps:
+`GlobalExceptionHandler` maps key exceptions to clean JSON messages:
 
 - `MethodArgumentNotValidException` -> `400 Bad Request`
 - `DataIntegrityViolationException` -> `409 Conflict`
@@ -200,23 +246,17 @@ Base paths:
 - `IllegalStateException` -> `400 Bad Request`
 - `EntityNotFoundException` -> `404 Not Found`
 - `HttpRequestMethodNotSupportedException` -> `405 Method Not Allowed`
-- Fallback `Exception` -> `500 Internal Server Error`
+- `AccessDeniedException` -> `403 Forbidden`
+- fallback `Exception` -> `500 Internal Server Error`
 
 ## Configuration
 
-`application.yml` reads DB config from environment variables:
+`src/main/resources/application.yml` expects:
 
 - `DB_URL`
 - `DB_USERNAME`
 - `DB_PASSWORD`
-
-Example values:
-
-```bash
-DB_URL=jdbc:postgresql://localhost:5432/vaidyalink
-DB_USERNAME=postgres
-DB_PASSWORD=your_password_here
-```
+- `JWT_SECRET` (Base64-encoded secret)
 
 ## Run Locally
 
@@ -224,7 +264,7 @@ DB_PASSWORD=your_password_here
 
 - Java 21
 - PostgreSQL running
-- Database created (example: `vaidyalink`)
+- A database created (example: `vaidyalink`)
 
 ### Windows PowerShell
 
@@ -232,6 +272,7 @@ DB_PASSWORD=your_password_here
 $env:DB_URL="jdbc:postgresql://localhost:5432/vaidyalink"
 $env:DB_USERNAME="postgres"
 $env:DB_PASSWORD="your_password_here"
+$env:JWT_SECRET="your_base64_secret"
 .\mvnw.cmd spring-boot:run
 ```
 
@@ -241,15 +282,17 @@ $env:DB_PASSWORD="your_password_here"
 export DB_URL="jdbc:postgresql://localhost:5432/vaidyalink"
 export DB_USERNAME="postgres"
 export DB_PASSWORD="your_password_here"
+export JWT_SECRET="your_base64_secret"
 ./mvnw spring-boot:run
 ```
 
-## Notes
+### OpenAPI
 
-- If you add fields in entities, ensure the database schema is updated before testing APIs.
-- Prefer environment variables for secrets; avoid committing credentials.
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- OpenAPI docs: `http://localhost:8080/v3/api-docs`
 
+## Troubleshooting Notes
 
----
-
-Built as a backend learning project with production-style layering and incremental business logic implementation.
+- If you add new fields (for example `appointmentTime`) after table creation, keep DB schema synchronized before testing APIs.
+- Keep secrets in environment variables; do not commit production credentials/secrets.
+- If auth fails unexpectedly, verify Bearer token format and role constraints on the target endpoint.

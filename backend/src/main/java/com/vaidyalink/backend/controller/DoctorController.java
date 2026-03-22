@@ -4,6 +4,9 @@ import com.vaidyalink.backend.dto.DoctorResponse;
 import com.vaidyalink.backend.entity.Doctor;
 import com.vaidyalink.backend.entity.Patient;
 import com.vaidyalink.backend.service.DoctorService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -39,11 +42,18 @@ public class DoctorController {
 
     @PreAuthorize("hasAnyRole('PATIENT', 'DOCTOR')")
     @GetMapping("/all")
-    public ResponseEntity<List<DoctorResponse>> getAllDoctors() {
-        List<Doctor> doctors = doctorService.getAllDoctors();
-        List<DoctorResponse> responseList = doctors.stream()
-                .map(d -> new DoctorResponse(d.getId(), d.getName(), d.getEmail(), d.getSpeciality(), d.getExperience()))
-                .toList();
-        return ResponseEntity.ok(responseList);
+    public ResponseEntity<Page<DoctorResponse>> getAllDoctors(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+
+        Page<Doctor> doctorPage = doctorService.getAllDoctors(pageable);
+
+        Page<DoctorResponse> responsePage = doctorPage.map(d ->
+                new DoctorResponse(d.getId(), d.getName(), d.getEmail(), d.getSpeciality(), d.getExperience())
+        );
+
+        return ResponseEntity.ok(responsePage);
     }
 }

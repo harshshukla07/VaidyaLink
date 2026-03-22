@@ -3,6 +3,8 @@ package com.vaidyalink.backend.service;
 import com.vaidyalink.backend.entity.Patient;
 import com.vaidyalink.backend.repository.PatientRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,7 +24,7 @@ public class PatientServiceImpl implements PatientService {
     }
 
     @Override
-    public List<Patient> getAllPatients() {
-        return patientRepository.findAll();
+    public Page<Patient> getAllPatients(Pageable pageable) {
+        return patientRepository.findAll(pageable);
     }
 }

@@ -2,6 +2,7 @@ package com.vaidyalink.backend.service;
 
 import com.vaidyalink.backend.entity.Doctor;
 import com.vaidyalink.backend.repository.DoctorRepository;
+import org.springframework.cache.annotation.Cacheable;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +24,7 @@ public class DoctorServiceImpl implements DoctorService{
     }
 
     @Override
+    @Cacheable(value = "doctors_page", key = "#pageable.pageNumber + '-' + #pageable.pageSize")
     public Page<Doctor> getAllDoctors(Pageable pageable) {
         return doctorRepository.findAll(pageable);
     }

@@ -1,13 +1,13 @@
 package com.vaidyalink.backend.service;
 
 import com.vaidyalink.backend.dto.AppointmentRequest;
-import com.vaidyalink.backend.entity.Appointment;
-import com.vaidyalink.backend.entity.AppointmentStatus;
-import com.vaidyalink.backend.entity.Doctor;
-import com.vaidyalink.backend.entity.Patient;
+import com.vaidyalink.backend.entity.*;
 import com.vaidyalink.backend.repository.AppointmentRepository;
 import com.vaidyalink.backend.repository.DoctorRepository;
+import com.vaidyalink.backend.repository.DoctorSlotRepository;
 import com.vaidyalink.backend.repository.PatientRepository;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,56 +25,92 @@ public class AppointmentServiceImpl implements AppointmentService{
     private final AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
     private final DoctorRepository doctorRepository;
+    private final DoctorSlotRepository doctorSlotRepository;
 
-    public AppointmentServiceImpl(AppointmentRepository appointmentRepository, PatientRepository patientRepository, DoctorRepository doctorRepository){
+    public AppointmentServiceImpl(AppointmentRepository appointmentRepository, PatientRepository patientRepository, DoctorRepository doctorRepository, DoctorSlotRepository doctorSlotRepository){
         this.appointmentRepository = appointmentRepository;
         this.patientRepository = patientRepository;
         this.doctorRepository = doctorRepository;
+        this.doctorSlotRepository = doctorSlotRepository;
     }
-
 
     @Override
-    public Appointment bookAppointment(AppointmentRequest request){
+    @Transactional
+    public Appointment bookAppointment(AppointmentRequest request) {
 
-        LocalTime cleanTime = request.getAppointmentTime().truncatedTo(ChronoUnit.MINUTES);
+        // Fetch Patient
+        Patient patient = patientRepository.findById(request.getPatientId())
+                .orElseThrow(() -> new RuntimeException("Patient Not Found with id: " + request.getPatientId()));
 
-        request.setAppointmentTime(cleanTime);
+        // Fetch the specific DoctorSlot
+        DoctorSlot slot = doctorSlotRepository.findByDoctorIdAndSlotDateAndStartTime(
+                request.getDoctorId(), request.getAppointmentDate(), request.getAppointmentTime()
+        ).orElseThrow(() -> new IllegalStateException("Slot not generated or invalid time for this doctor."));
 
-        LocalDate today = LocalDate.now();
-        LocalTime now = LocalTime.now();
-
-        if (request.getAppointmentDate().equals(today)) {
-            if (request.getAppointmentTime().isBefore(now)) {
-                throw new IllegalStateException("You cannot book a past time for today's date.");
-            }
+        // The Check
+        if (slot.getStatus() == SlotStatus.BOOKED) {
+            throw new IllegalStateException("Sorry, This slot is already booked.");
         }
 
-        int minutes = request.getAppointmentTime().getMinute();
-        if (minutes != 0 && minutes != 20 && minutes != 40) {
-            throw new IllegalStateException("Invalid slot! Appointments can only be booked at :00 or :20 or :40 minutes (e.g., 10:00, 10:20, 10:40).");
-        }
+        // Lock and Update Slot
+        slot.setStatus(SlotStatus.BOOKED);
+        doctorSlotRepository.save(slot);
 
-        //Fetching patient by id
-        Patient patient = patientRepository.findById(request.getPatientId()).orElseThrow(()-> new RuntimeException("Patient Not Found with id: "+request.getPatientId()));
-        //Fetching Doctor by id
-        Doctor doctor = doctorRepository.findById(request.getDoctorId()).orElseThrow(()-> new RuntimeException("Doctor Not Found with id: "+request.getDoctorId()));
-        //Create new Appointment Object
+        // Generate the Real Appointment Record
         Appointment appointment = new Appointment();
-
-        boolean isSlotTaken = appointmentRepository.existsByDoctorIdAndAppointmentDateAndAppointmentTimeAndStatusNot(request.getDoctorId(), request.getAppointmentDate(), request.getAppointmentTime(), AppointmentStatus.CANCELLED);
-        if(isSlotTaken){
-            throw new IllegalStateException("Sorry, This slot for Dr." + doctor.getName() + " is already booked.");
-        }
-
-        //Set data using setters
         appointment.setPatient(patient);
-        appointment.setDoctor(doctor);
-        appointment.setAppointmentDate(request.getAppointmentDate());
-        appointment.setAppointmentTime(request.getAppointmentTime());
+        appointment.setDoctor(slot.getDoctor());
+        appointment.setAppointmentDate(slot.getSlotDate());
+        appointment.setAppointmentTime(slot.getStartTime());
         appointment.setStatus(AppointmentStatus.PENDING);
 
+        // Save in Appointments Table
         return appointmentRepository.save(appointment);
     }
+
+
+//    @Override
+//    public Appointment bookAppointment(AppointmentRequest request){
+//
+//        LocalTime cleanTime = request.getAppointmentTime().truncatedTo(ChronoUnit.MINUTES);
+//
+//        request.setAppointmentTime(cleanTime);
+//
+//        LocalDate today = LocalDate.now();
+//        LocalTime now = LocalTime.now();
+//
+//        if (request.getAppointmentDate().equals(today)) {
+//            if (request.getAppointmentTime().isBefore(now)) {
+//                throw new IllegalStateException("You cannot book a past time for today's date.");
+//            }
+//        }
+//
+//        int minutes = request.getAppointmentTime().getMinute();
+//        if (minutes != 0 && minutes != 20 && minutes != 40) {
+//            throw new IllegalStateException("Invalid slot! Appointments can only be booked at :00 or :20 or :40 minutes (e.g., 10:00, 10:20, 10:40).");
+//        }
+//
+//        //Fetching patient by id
+//        Patient patient = patientRepository.findById(request.getPatientId()).orElseThrow(()-> new RuntimeException("Patient Not Found with id: "+request.getPatientId()));
+//        //Fetching Doctor by id
+//        Doctor doctor = doctorRepository.findById(request.getDoctorId()).orElseThrow(()-> new RuntimeException("Doctor Not Found with id: "+request.getDoctorId()));
+//        //Create new Appointment Object
+//        Appointment appointment = new Appointment();
+//
+//        boolean isSlotTaken = appointmentRepository.existsByDoctorIdAndAppointmentDateAndAppointmentTimeAndStatusNot(request.getDoctorId(), request.getAppointmentDate(), request.getAppointmentTime(), AppointmentStatus.CANCELLED);
+//        if(isSlotTaken){
+//            throw new IllegalStateException("Sorry, This slot for Dr." + doctor.getName() + " is already booked.");
+//        }
+//
+//        //Set data using setters
+//        appointment.setPatient(patient);
+//        appointment.setDoctor(doctor);
+//        appointment.setAppointmentDate(request.getAppointmentDate());
+//        appointment.setAppointmentTime(request.getAppointmentTime());
+//        appointment.setStatus(AppointmentStatus.PENDING);
+//
+//        return appointmentRepository.save(appointment);
+//    }
 
 
     @Override

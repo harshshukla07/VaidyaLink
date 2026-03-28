@@ -11,4 +11,5 @@ public interface DoctorService {
     List<Doctor> getDoctorsBySpeciality(String speciality);
     Page<Doctor> getAllDoctors(Pageable pageable);
     Doctor getDoctorById(Long id);
+    Doctor registerNewDoctor(Doctor doctor);
 }

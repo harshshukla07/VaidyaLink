@@ -2,6 +2,7 @@ package com.vaidyalink.backend.service;
 
 import com.vaidyalink.backend.entity.Doctor;
 import com.vaidyalink.backend.repository.DoctorRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
@@ -32,6 +33,12 @@ public class DoctorServiceImpl implements DoctorService{
     @Override
     public Doctor getDoctorById(Long id) {
         return doctorRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("No patient found with this particular Id: " + id));
+    }
+
+    @Override
+    @CacheEvict(value = "doctors_page", allEntries = true)
+    public Doctor registerNewDoctor(Doctor doctor) {
+        return doctorRepository.save(doctor);
     }
 
 }

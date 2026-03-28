@@ -8,6 +8,7 @@ import com.vaidyalink.backend.entity.Patient;
 import com.vaidyalink.backend.repository.DoctorRepository;
 import com.vaidyalink.backend.repository.PatientRepository;
 import com.vaidyalink.backend.security.JwtUtil;
+import com.vaidyalink.backend.service.DoctorService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,9 @@ public class AuthController {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private DoctorService doctorService;
 
     @PostMapping("/register/patient")
     public ResponseEntity<?> registerPatient(@Valid @RequestBody PatientRegisterRequest request) {
@@ -78,7 +82,8 @@ public class AuthController {
 
         doctor.setPassword(passwordEncoder.encode(request.getPassword()));
 
-        doctorRepository.save(doctor);
+//        doctorRepository.save(doctor);
+        doctorService.registerNewDoctor(doctor);
         return ResponseEntity.ok("Doctor registered successfully!");
     }
 

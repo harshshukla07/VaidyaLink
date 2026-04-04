@@ -13,7 +13,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import org.springframework.kafka.core.KafkaTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
@@ -30,14 +29,12 @@ public class AppointmentServiceImpl implements AppointmentService{
     private final PatientRepository patientRepository;
     private final DoctorRepository doctorRepository;
     private final DoctorSlotRepository doctorSlotRepository;
-    private final KafkaTemplate<String, String> kafkaTemplate;
 
-    public AppointmentServiceImpl(AppointmentRepository appointmentRepository, PatientRepository patientRepository, DoctorRepository doctorRepository, DoctorSlotRepository doctorSlotRepository, KafkaTemplate<String, String> kafkaTemplate){
+    public AppointmentServiceImpl(AppointmentRepository appointmentRepository, PatientRepository patientRepository, DoctorRepository doctorRepository, DoctorSlotRepository doctorSlotRepository){
         this.appointmentRepository = appointmentRepository;
         this.patientRepository = patientRepository;
         this.doctorRepository = doctorRepository;
         this.doctorSlotRepository = doctorSlotRepository;
-        this.kafkaTemplate = kafkaTemplate;
     }
 
     @Override
@@ -72,25 +69,6 @@ public class AppointmentServiceImpl implements AppointmentService{
 
         // Save in Appointments Table
         Appointment savedAppointment = appointmentRepository.save(appointment);
-        
-        try {
-            ObjectMapper objectMapper = new ObjectMapper();
-            
-            Map<String, Object> eventPayload = new HashMap<>();
-            eventPayload.put("patientName", patient.getName());
-            eventPayload.put("patientEmail", patient.getEmail()); 
-            eventPayload.put("doctorName", slot.getDoctor().getName());
-            eventPayload.put("appointmentDate", slot.getSlotDate().toString());
-            eventPayload.put("appointmentTime", slot.getStartTime().toString());
-            
-            String jsonMessage = objectMapper.writeValueAsString(eventPayload);
-
-            // send json to kafka pipeline
-            kafkaTemplate.send("appointment-notifications", jsonMessage);
-
-        } catch (Exception e) {
-            System.out.println("Error in sending kafka message: " + e.getMessage());
-        }
         
         return savedAppointment;
     }

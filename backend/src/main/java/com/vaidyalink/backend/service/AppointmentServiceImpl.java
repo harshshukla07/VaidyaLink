@@ -74,50 +74,6 @@ public class AppointmentServiceImpl implements AppointmentService{
     }
 
 
-//    @Override
-//    public Appointment bookAppointment(AppointmentRequest request){
-//
-//        LocalTime cleanTime = request.getAppointmentTime().truncatedTo(ChronoUnit.MINUTES);
-//
-//        request.setAppointmentTime(cleanTime);
-//
-//        LocalDate today = LocalDate.now();
-//        LocalTime now = LocalTime.now();
-//
-//        if (request.getAppointmentDate().equals(today)) {
-//            if (request.getAppointmentTime().isBefore(now)) {
-//                throw new IllegalStateException("You cannot book a past time for today's date.");
-//            }
-//        }
-//
-//        int minutes = request.getAppointmentTime().getMinute();
-//        if (minutes != 0 && minutes != 20 && minutes != 40) {
-//            throw new IllegalStateException("Invalid slot! Appointments can only be booked at :00 or :20 or :40 minutes (e.g., 10:00, 10:20, 10:40).");
-//        }
-//
-//        //Fetching patient by id
-//        Patient patient = patientRepository.findById(request.getPatientId()).orElseThrow(()-> new RuntimeException("Patient Not Found with id: "+request.getPatientId()));
-//        //Fetching Doctor by id
-//        Doctor doctor = doctorRepository.findById(request.getDoctorId()).orElseThrow(()-> new RuntimeException("Doctor Not Found with id: "+request.getDoctorId()));
-//        //Create new Appointment Object
-//        Appointment appointment = new Appointment();
-//
-//        boolean isSlotTaken = appointmentRepository.existsByDoctorIdAndAppointmentDateAndAppointmentTimeAndStatusNot(request.getDoctorId(), request.getAppointmentDate(), request.getAppointmentTime(), AppointmentStatus.CANCELLED);
-//        if(isSlotTaken){
-//            throw new IllegalStateException("Sorry, This slot for Dr." + doctor.getName() + " is already booked.");
-//        }
-//
-//        //Set data using setters
-//        appointment.setPatient(patient);
-//        appointment.setDoctor(doctor);
-//        appointment.setAppointmentDate(request.getAppointmentDate());
-//        appointment.setAppointmentTime(request.getAppointmentTime());
-//        appointment.setStatus(AppointmentStatus.PENDING);
-//
-//        return appointmentRepository.save(appointment);
-//    }
-
-
     @Override
     public Page<Appointment> getAppointmentsByPatientId(Long patientId, int pageNumber, int pageSize) {
         Pageable pageable = PageRequest.of(

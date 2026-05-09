@@ -70,22 +70,6 @@ public class AppointmentServiceImpl implements AppointmentService{
         // Save in Appointments Table
         Appointment savedAppointment = appointmentRepository.save(appointment);
         
-//        try {
-//            ObjectMapper objectMapper = new ObjectMapper();
-//
-//            Map<String, Object> eventPayload = new HashMap<>();
-//            eventPayload.put("patientName", patient.getName());
-//            eventPayload.put("patientEmail", patient.getEmail());
-//            eventPayload.put("doctorName", slot.getDoctor().getName());
-//            eventPayload.put("appointmentDate", slot.getSlotDate().toString());
-//            eventPayload.put("appointmentTime", slot.getStartTime().toString());
-//
-//            String jsonMessage = objectMapper.writeValueAsString(eventPayload);
-//
-//        } catch (Exception e) {
-//            System.out.println("Error in sending kafka message: " + e.getMessage());
-//        }
-        
         return savedAppointment;
     }
 

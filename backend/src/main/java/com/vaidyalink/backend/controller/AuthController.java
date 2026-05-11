@@ -21,9 +21,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.authentication.BadCredentialsException;
+import jakarta.persistence.EntityNotFoundException;
 
-import java.util.HashMap;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -110,12 +109,12 @@ public class AuthController {
             // Fetch additional user details based on their role to enrich the auth payload
             if (role.equals("ROLE_PATIENT")) {
                 Patient patient = patientRepository.findByEmail(loginRequest.getEmail())
-                        .orElseThrow(() -> new RuntimeException("Patient not found"));
+                        .orElseThrow(() -> new EntityNotFoundException("Patient data missing in system"));
                 authResponse.setId(patient.getId());
                 authResponse.setName(patient.getName());
             } else if (role.equals("ROLE_DOCTOR")) {
                 Doctor doctor = doctorRepository.findByEmail(loginRequest.getEmail())
-                        .orElseThrow(() -> new RuntimeException("Doctor not found"));
+                        .orElseThrow(() -> new EntityNotFoundException("Doctor data missing in system"));
                 authResponse.setId(doctor.getId());
                 authResponse.setName(doctor.getName());
             }
@@ -125,6 +124,9 @@ public class AuthController {
         } catch (BadCredentialsException e) {
             // Catch only authentication failures (wrong email/password)
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Error: Invalid email or password");
+        } catch (EntityNotFoundException e) {
+            // Catch missing database records after successful authentication
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: " + e.getMessage());
         } catch (Exception e) {
             // Catch database errors or any other unexpected issues
             System.err.println("Critical Login Error: " + e.getMessage());
@@ -144,12 +146,12 @@ public class AuthController {
 
         if(role.equals("ROLE_PATIENT")){
             Patient patient = patientRepository.findByEmail(email)
-                    .orElseThrow(()->new RuntimeException("Patient not found"));
+                    .orElseThrow(()->new EntityNotFoundException("Patient data missing in system"));
             authResponse.setId(patient.getId());
             authResponse.setName(patient.getName());
         }else if(role.equals("ROLE_DOCTOR")){
             Doctor doctor = doctorRepository.findByEmail(email)
-                    .orElseThrow(()->new RuntimeException("Doctor not found"));
+                    .orElseThrow(()->new EntityNotFoundException("Doctor data missing in system"));
             authResponse.setId(doctor.getId());
             authResponse.setName(doctor.getName());
         }

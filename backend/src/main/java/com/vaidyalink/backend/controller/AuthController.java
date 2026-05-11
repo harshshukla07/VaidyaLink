@@ -1,5 +1,6 @@
 package com.vaidyalink.backend.controller;
 
+import com.vaidyalink.backend.dto.AuthResponse;
 import com.vaidyalink.backend.dto.DoctorRegisterRequest;
 import com.vaidyalink.backend.dto.LoginRequest;
 import com.vaidyalink.backend.dto.PatientRegisterRequest;
@@ -87,6 +88,30 @@ public class AuthController {
         return ResponseEntity.ok("Doctor registered successfully!");
     }
 
+//    @PostMapping("/login")
+//    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+//        try {
+//            Authentication authentication = authenticationManager.authenticate(
+//                    new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
+//            );
+//
+//            SecurityContextHolder.getContext().setAuthentication(authentication);
+//
+//            String jwt = jwtUtil.generateToken(loginRequest.getEmail());
+//            String role = authentication.getAuthorities().iterator().next().getAuthority();
+//
+//            Map<String, String> response = new HashMap<>();
+//            response.put("token", jwt);
+//            response.put("role", role);
+//            response.put("message", "Login successful");
+//
+//            return ResponseEntity.ok(response);
+//
+//        } catch (Exception e) {
+//            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Error: Invalid email or password");
+//        }
+//    }
+
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         try {
@@ -99,15 +124,54 @@ public class AuthController {
             String jwt = jwtUtil.generateToken(loginRequest.getEmail());
             String role = authentication.getAuthorities().iterator().next().getAuthority();
 
-            Map<String, String> response = new HashMap<>();
-            response.put("token", jwt);
-            response.put("role", role);
-            response.put("message", "Login successful");
+            // Made a new DTO
+            AuthResponse authResponse = new AuthResponse();
+            authResponse.setToken(jwt);
+            authResponse.setRole(role);
+            authResponse.setEmail(loginRequest.getEmail());
 
-            return ResponseEntity.ok(response);
+            // Fetch additional user details based on their role to enrich the auth payload
+            if (role.equals("ROLE_PATIENT")) {
+                Patient patient = patientRepository.findByEmail(loginRequest.getEmail())
+                        .orElseThrow(() -> new RuntimeException("Patient not found"));
+                authResponse.setId(patient.getId());
+                authResponse.setName(patient.getName());
+            } else if (role.equals("ROLE_DOCTOR")) {
+                Doctor doctor = doctorRepository.findByEmail(loginRequest.getEmail())
+                        .orElseThrow(() -> new RuntimeException("Doctor not found"));
+                authResponse.setId(doctor.getId());
+                authResponse.setName(doctor.getName());
+            }
+
+            return ResponseEntity.ok(authResponse);
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Error: Invalid email or password");
         }
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<?> getCurrentUser(Authentication authentication) {
+        // Get email and role from the 'authentication' object
+        String email = authentication.getName();
+        String role = authentication.getAuthorities().iterator().next().getAuthority();
+
+        AuthResponse authResponse = new AuthResponse();
+        authResponse.setEmail(email);
+        authResponse.setRole(role);
+
+        if(role.equals("ROLE_PATIENT")){
+            Patient patient = patientRepository.findByEmail(email)
+                    .orElseThrow(()->new RuntimeException("Patient not found"));
+            authResponse.setId(patient.getId());
+            authResponse.setName(patient.getName());
+        }else if(role.equals("ROLE_DOCTOR")){
+            Doctor doctor = doctorRepository.findByEmail(email)
+                    .orElseThrow(()->new RuntimeException("Doctor not found"));
+            authResponse.setId(doctor.getId());
+            authResponse.setName(doctor.getName());
+        }
+
+        return ResponseEntity.ok(authResponse);
     }
 }

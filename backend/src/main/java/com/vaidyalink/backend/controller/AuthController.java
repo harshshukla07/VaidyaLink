@@ -20,6 +20,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.authentication.BadCredentialsException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -88,30 +89,6 @@ public class AuthController {
         return ResponseEntity.ok("Doctor registered successfully!");
     }
 
-//    @PostMapping("/login")
-//    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-//        try {
-//            Authentication authentication = authenticationManager.authenticate(
-//                    new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
-//            );
-//
-//            SecurityContextHolder.getContext().setAuthentication(authentication);
-//
-//            String jwt = jwtUtil.generateToken(loginRequest.getEmail());
-//            String role = authentication.getAuthorities().iterator().next().getAuthority();
-//
-//            Map<String, String> response = new HashMap<>();
-//            response.put("token", jwt);
-//            response.put("role", role);
-//            response.put("message", "Login successful");
-//
-//            return ResponseEntity.ok(response);
-//
-//        } catch (Exception e) {
-//            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Error: Invalid email or password");
-//        }
-//    }
-
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         try {
@@ -145,8 +122,13 @@ public class AuthController {
 
             return ResponseEntity.ok(authResponse);
 
-        } catch (Exception e) {
+        } catch (BadCredentialsException e) {
+            // Catch only authentication failures (wrong email/password)
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Error: Invalid email or password");
+        } catch (Exception e) {
+            // Catch database errors or any other unexpected issues
+            System.err.println("Critical Login Error: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: An unexpected error occurred during login. Please try again later.");
         }
     }
 

@@ -1,6 +1,7 @@
 package com.vaidyalink.backend.controller;
 
 import com.vaidyalink.backend.dto.AppointmentRequest;
+import com.vaidyalink.backend.dto.AppointmentResponse;
 import com.vaidyalink.backend.entity.Appointment;
 import com.vaidyalink.backend.entity.AppointmentStatus;
 import com.vaidyalink.backend.service.AppointmentService;
@@ -25,49 +26,63 @@ public class AppointmentController {
         this.appointmentService = appointmentService;
     }
 
+    // Helper method to convert raw Entity into a safe DTO
+    private AppointmentResponse mapToResponse(Appointment appointment) {
+        return new AppointmentResponse(
+                appointment.getId(),
+                appointment.getPatient().getId(),
+                appointment.getPatient().getName(),
+                appointment.getDoctor().getId(),
+                appointment.getDoctor().getName(),
+                appointment.getAppointmentDate(),
+                appointment.getAppointmentTime(),
+                appointment.getStatus()
+        );
+    }
+
     @PreAuthorize("hasRole('PATIENT')")
     @PostMapping("/book")
-    public ResponseEntity<Appointment> bookAppointment(@Valid @RequestBody AppointmentRequest request){
+    public ResponseEntity<AppointmentResponse> bookAppointment(@Valid @RequestBody AppointmentRequest request){
         Appointment appointment = appointmentService.bookAppointment(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(appointment);
+        return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(appointment));
     }
 
     @PreAuthorize("hasAnyRole('PATIENT', 'DOCTOR')")
     @GetMapping("/patient/{patientId}")
-    public ResponseEntity<Page<Appointment>> getPatientAppointments(
+    public ResponseEntity<Page<AppointmentResponse>> getPatientAppointments(
             @PathVariable Long patientId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
         Page<Appointment> appointments = appointmentService.getAppointmentsByPatientId(patientId, page, size);
-        return ResponseEntity.ok(appointments);
+        return ResponseEntity.ok(appointments.map(this::mapToResponse));
     }
 
     @PreAuthorize("hasRole('DOCTOR')")
     @GetMapping("/doctor/{doctorId}")
-    public ResponseEntity<Page<Appointment>> getDoctorAppointments(
+    public ResponseEntity<Page<AppointmentResponse>> getDoctorAppointments(
             @PathVariable Long doctorId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
+        Page<Appointment> appointments;
         if (date != null) {
-            Page<Appointment> appointments = appointmentService.getAppointmentsByDoctorAndDate(doctorId, date, page, size);
-            return ResponseEntity.ok(appointments);
+            appointments = appointmentService.getAppointmentsByDoctorAndDate(doctorId, date, page, size);
+        } else {
+            appointments = appointmentService.getAppointmentsByDoctorId(doctorId, page, size);
         }
-
-        Page<Appointment> appointments = appointmentService.getAppointmentsByDoctorId(doctorId, page, size);
-        return ResponseEntity.ok(appointments);
+        return ResponseEntity.ok(appointments.map(this::mapToResponse));
     }
 
     @PreAuthorize("hasAnyRole('PATIENT', 'DOCTOR')")
     @PatchMapping("/{appointmentId}/status")
-    public ResponseEntity<Appointment> updateStatus(
+    public ResponseEntity<AppointmentResponse> updateStatus(
             @PathVariable Long appointmentId,
             @RequestParam AppointmentStatus status) {
 
         Appointment appointment = appointmentService.updateAppointmentStatus(appointmentId, status);
-        return ResponseEntity.ok(appointment);
+        return ResponseEntity.ok(mapToResponse(appointment));
     }
 
     @PreAuthorize("hasAnyRole('PATIENT', 'DOCTOR')")
@@ -82,24 +97,24 @@ public class AppointmentController {
 
     @PreAuthorize("hasRole('DOCTOR')")
     @GetMapping("/doctor/{doctorId}/search")
-    public ResponseEntity<Page<Appointment>> searchDoctorAppointments(
+    public ResponseEntity<Page<AppointmentResponse>> searchDoctorAppointments(
             @PathVariable Long doctorId,
             @RequestParam String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
         Page<Appointment> appointments = appointmentService.searchAppointments(doctorId, query, page, size);
-        return ResponseEntity.ok(appointments);
+        return ResponseEntity.ok(appointments.map(this::mapToResponse));
     }
 
     @PreAuthorize("hasRole('PATIENT')")
     @GetMapping("/patient/{patientId}/upcoming")
-    public ResponseEntity<Page<Appointment>> getUpcomingPatientAppointments(
+    public ResponseEntity<Page<AppointmentResponse>> getUpcomingPatientAppointments(
             @PathVariable Long patientId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
         Page<Appointment> appointments = appointmentService.getUpcomingAppointmentsForPatient(patientId, page, size);
-        return ResponseEntity.ok(appointments);
+        return ResponseEntity.ok(appointments.map(this::mapToResponse));
     }
 }

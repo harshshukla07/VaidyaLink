@@ -12,6 +12,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.vaidyalink.backend.entity.Patient;
+import com.vaidyalink.backend.service.PatientService;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -21,9 +25,11 @@ import java.util.List;
 @RequestMapping("/api/appointments")
 public class AppointmentController {
     private final AppointmentService appointmentService;
+    private final PatientService patientService;
 
-    public AppointmentController(AppointmentService appointmentService){
+    public AppointmentController(AppointmentService appointmentService, PatientService patientService) {
         this.appointmentService = appointmentService;
+        this.patientService = patientService;
     }
 
     // Helper method to convert raw Entity into a safe DTO
@@ -40,9 +46,27 @@ public class AppointmentController {
         );
     }
 
+    private void verifyPatientOwnership(Long requestedPatientId, Authentication authentication) {
+        String role = authentication.getAuthorities().iterator().next().getAuthority();
+        String loggedInEmail = authentication.getName();
+
+        if (role.equals("ROLE_PATIENT")) {
+            Patient patient = patientService.getPatientById(requestedPatientId);
+            if (!patient.getEmail().equals(loggedInEmail)) {
+                throw new AccessDeniedException("Viewing other patient's appointments is not allowed!");
+            }
+        }
+    }
+
     @PreAuthorize("hasRole('PATIENT')")
     @PostMapping("/book")
-    public ResponseEntity<AppointmentResponse> bookAppointment(@Valid @RequestBody AppointmentRequest request){
+    public ResponseEntity<AppointmentResponse> bookAppointment(
+            @Valid @RequestBody AppointmentRequest request,
+            Authentication authentication){
+
+        // Shield Check
+        verifyPatientOwnership(request.getPatientId(), authentication);
+
         Appointment appointment = appointmentService.bookAppointment(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(appointment));
     }
@@ -52,7 +76,11 @@ public class AppointmentController {
     public ResponseEntity<Page<AppointmentResponse>> getPatientAppointments(
             @PathVariable Long patientId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication) {
+
+        // Shield Check
+        verifyPatientOwnership(patientId, authentication);
 
         Page<Appointment> appointments = appointmentService.getAppointmentsByPatientId(patientId, page, size);
         return ResponseEntity.ok(appointments.map(this::mapToResponse));
@@ -112,7 +140,11 @@ public class AppointmentController {
     public ResponseEntity<Page<AppointmentResponse>> getUpcomingPatientAppointments(
             @PathVariable Long patientId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication) {
+
+        // Shield Check
+        verifyPatientOwnership(patientId, authentication);
 
         Page<Appointment> appointments = appointmentService.getUpcomingAppointmentsForPatient(patientId, page, size);
         return ResponseEntity.ok(appointments.map(this::mapToResponse));

@@ -120,43 +120,22 @@ public class AppointmentServiceImpl implements AppointmentService{
     @Override
     public List<LocalTime> getAvailableSlots(Long doctorId, LocalDate date) {
 
+        // Check if doctor exists
         doctorRepository.findById(doctorId)
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Doctor not found with ID: " + doctorId));
 
-        List<LocalTime> availableSlots = new ArrayList<>();
+        // Fetch ONLY explicitly generated and AVAILABLE slots from the DoctorSlot table
+        List<DoctorSlot> availableSlotsList = doctorSlotRepository.findByDoctorIdAndSlotDateAndStatus(
+                doctorId, date, SlotStatus.AVAILABLE);
 
-        // SHIFT 1: Morning OPD (10:00 AM to 1:00 PM)
-        LocalTime morningStart = LocalTime.of(10, 0);
-        LocalTime morningEnd = LocalTime.of(13, 0);
+        // Extract times and filter out past times if the date is today
+        boolean isToday = date.equals(LocalDate.now());
+        LocalTime now = LocalTime.now();
 
-        while (morningStart.isBefore(morningEnd)) {
-            availableSlots.add(morningStart);
-            morningStart = morningStart.plusMinutes(20);
-        }
-
-        // SHIFT 2: Evening OPD (6:00 PM to 9:00 PM)
-        LocalTime eveningStart = LocalTime.of(18, 0);
-        LocalTime eveningEnd = LocalTime.of(21, 0);
-
-        while (eveningStart.isBefore(eveningEnd)) {
-            availableSlots.add(eveningStart);
-            eveningStart = eveningStart.plusMinutes(20);
-        }
-
-        List<Appointment> bookedAppointments = appointmentRepository.findByDoctorIdAndAppointmentDateAndStatusNot(doctorId, date, AppointmentStatus.CANCELLED);
-
-        List<LocalTime> bookedTimes = bookedAppointments.stream()
-                .map(Appointment::getAppointmentTime)
-                .toList();
-
-        availableSlots.removeAll(bookedTimes);
-
-        if (date.equals(LocalDate.now())) {
-            LocalTime now = LocalTime.now();
-            availableSlots.removeIf(slot -> slot.isBefore(now));
-        }
-
-        return availableSlots;
+        return availableSlotsList.stream()
+                .map(DoctorSlot::getStartTime)
+                .filter(time -> !isToday || time.isAfter(now)) // only future time allowed
+                .toList(); // Immutable list for safety
     }
 
     @Override

@@ -5,7 +5,7 @@ import com.vaidyalink.backend.entity.DoctorSlot;
 import com.vaidyalink.backend.service.DoctorSlotService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import jakarta.validation.Valid;
 import java.util.List;
 
 @RestController
@@ -21,7 +21,7 @@ public class DoctorSlotController {
     @PostMapping("/{doctorId}/slots/generate")
     public ResponseEntity<?> generateSlots(
             @PathVariable Long doctorId,
-            @RequestBody SlotGenerateRequest request) {
+            @Valid @RequestBody SlotGenerateRequest request) {
 
         List<DoctorSlot> generatedSlots = doctorSlotService.generateSlotsForDay(
                 doctorId,

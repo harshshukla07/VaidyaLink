@@ -26,6 +26,10 @@ public class DoctorSlotServiceImpl implements DoctorSlotService {
     @Transactional
     public List<DoctorSlot> generateSlotsForDay(Long doctorId, LocalDate date, LocalTime shiftStartTime, LocalTime shiftEndTime, int durationInMinutes) {
 
+        if (date.equals(LocalDate.now()) && shiftStartTime.isBefore(LocalTime.now())) {
+            throw new IllegalStateException("Slot can't be generated in past!");
+        }
+
         Doctor doctor = doctorRepository.findById(doctorId)
                 .orElseThrow(() -> new RuntimeException("Doctor not found with ID: " + doctorId));
 

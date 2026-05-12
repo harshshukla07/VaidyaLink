@@ -9,8 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.access.AccessDeniedException;
 
 @RestController
 @RequestMapping("/api/patients")
@@ -23,8 +23,18 @@ public class PatientController {
 
     @PreAuthorize("hasAnyRole('PATIENT', 'DOCTOR')")
     @GetMapping("/{id}")
-    public ResponseEntity<PatientResponse> getPatientById(@PathVariable Long id){
+    public ResponseEntity<PatientResponse> getPatientById(@PathVariable Long id, Authentication authentication){
+
         Patient patient = patientService.getPatientById(id);
+
+        // Security Check
+        String role = authentication.getAuthorities().iterator().next().getAuthority();
+        String loggedInEmail = authentication.getName(); //got mail from jwt
+
+        if (role.equals("ROLE_PATIENT") && !patient.getEmail().equals(loggedInEmail)) {
+            throw new AccessDeniedException("You are only allowed to see your own details");
+        }
+
         PatientResponse response = new PatientResponse(patient.getId(), patient.getName(), patient.getEmail(), patient.getMobile(), patient.getGender(), patient.getAge());
         return ResponseEntity.ok(response);
     }

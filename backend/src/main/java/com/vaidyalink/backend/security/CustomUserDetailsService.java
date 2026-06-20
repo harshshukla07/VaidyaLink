@@ -1,9 +1,7 @@
 package com.vaidyalink.backend.security;
 
-import com.vaidyalink.backend.entity.Doctor;
-import com.vaidyalink.backend.entity.Patient;
-import com.vaidyalink.backend.repository.DoctorRepository;
-import com.vaidyalink.backend.repository.PatientRepository;
+import java.util.Collections;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
@@ -12,8 +10,10 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import com.vaidyalink.backend.entity.Doctor;
+import com.vaidyalink.backend.entity.Patient;
+import com.vaidyalink.backend.repository.DoctorRepository;
+import com.vaidyalink.backend.repository.PatientRepository;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {

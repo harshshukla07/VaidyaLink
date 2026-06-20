@@ -1,27 +1,28 @@
 package com.vaidyalink.backend.service;
 
-import com.vaidyalink.backend.dto.AppointmentRequest;
-import com.vaidyalink.backend.entity.*;
-import com.vaidyalink.backend.repository.AppointmentRepository;
-import com.vaidyalink.backend.repository.DoctorRepository;
-import com.vaidyalink.backend.repository.DoctorSlotRepository;
-import com.vaidyalink.backend.repository.PatientRepository;
-import jakarta.persistence.EntityNotFoundException;
-import jakarta.transaction.Transactional;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.HashMap;
-import java.util.Map;
+import com.vaidyalink.backend.dto.AppointmentRequest;
+import com.vaidyalink.backend.entity.Appointment;
+import com.vaidyalink.backend.entity.AppointmentStatus;
+import com.vaidyalink.backend.entity.DoctorSlot;
+import com.vaidyalink.backend.entity.Patient;
+import com.vaidyalink.backend.entity.SlotStatus;
+import com.vaidyalink.backend.repository.AppointmentRepository;
+import com.vaidyalink.backend.repository.DoctorRepository;
+import com.vaidyalink.backend.repository.DoctorSlotRepository;
+import com.vaidyalink.backend.repository.PatientRepository;
+
+import jakarta.transaction.Transactional;
 
 @Service
 public class AppointmentServiceImpl implements AppointmentService{

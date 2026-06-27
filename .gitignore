@@ -1,2 +1,42 @@
-.idea
-.vscode
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment & secrets (never commit)
+.env
+.env.*
+!.env.example
+*.env
+secrets/
+**/application-dev.yml
+**/application-local.yml
+**/application-prod.local.yml
+
+# Keys & credentials
+*.pem
+*.key
+*.p12
+*.jks
+credentials.json
+serviceAccount*.json
+
+# Build output
+**/target/
+**/build/
+*.class
+*.jar
+*.war
+
+# Logs
+*.log
+logs/
+
+# Cursor / local tooling (optional local state)
+.cursor/

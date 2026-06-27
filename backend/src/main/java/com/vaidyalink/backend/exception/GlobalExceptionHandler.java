@@ -67,6 +67,14 @@ public class GlobalExceptionHandler {
         return error;
     }
 
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    @ExceptionHandler(AiTriageException.class)
+    public Map<String, String> handleAiTriageException(AiTriageException ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", ex.getMessage());
+        return error;
+    }
+
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(jakarta.persistence.EntityNotFoundException.class)
     public Map<String, String> handleNotFound(jakarta.persistence.EntityNotFoundException ex) {
@@ -91,11 +99,14 @@ public class GlobalExceptionHandler {
         return error;
     }
 
-    @ResponseStatus(HttpStatus.FORBIDDEN) // 403 Status Code
+    @ResponseStatus(HttpStatus.FORBIDDEN)
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public Map<String, String> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException ex) {
         Map<String, String> error = new HashMap<>();
-        error.put("error", "Access Denied: You do not have the required role to perform this action.");
+        String message = ex.getMessage();
+        error.put("error", message != null && !message.isBlank()
+                ? message
+                : "Access Denied: You do not have the required role to perform this action.");
         return error;
     }
 }

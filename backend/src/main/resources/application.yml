@@ -35,3 +35,10 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET}
+
+ai:
+  triage:
+    base-url: ${AI_TRIAGE_URL:http://localhost:8000}
+    stub-enabled: ${AI_TRIAGE_STUB:true}
+    connect-timeout: 5s
+    read-timeout: 30s

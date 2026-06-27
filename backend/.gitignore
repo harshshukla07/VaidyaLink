@@ -32,6 +32,28 @@ build/
 ### VS Code ###
 .vscode/
 
+### Environment & secrets (never commit) ###
+.env
+.env.*
+!.env.example
+*.env
+secrets/
+**/application-dev.yml
+**/application-local.yml
+**/application-prod.local.yml
+
+### Keys & credentials ###
+*.pem
+*.key
+*.p12
+*.jks
+credentials.json
+serviceAccount*.json
+
 ### Application Profiles (Local Secrets) ###
 application-dev.yml
+application-local.yml
 
+### Logs ###
+*.log
+logs/

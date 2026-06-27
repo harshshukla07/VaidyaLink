@@ -2,6 +2,7 @@ package com.vaidyalink.backend.entity;
 
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.DynamicInsert;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -24,6 +25,7 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name="chat_messages")
+@DynamicInsert
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

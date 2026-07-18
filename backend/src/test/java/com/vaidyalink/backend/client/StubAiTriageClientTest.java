@@ -21,6 +21,7 @@ class StubAiTriageClientTest {
         TriageRequest request = TriageRequest.builder()
                 .sessionId(1L)
                 .messages(List.of(new MessageDTO(1L, "PATIENT", "I feel dizzy")))
+                .allowedSpecialties(List.of("General Physician", "Dermatology"))
                 .build();
 
         TriageResponse response = client.triage(request);

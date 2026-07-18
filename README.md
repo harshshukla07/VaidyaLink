@@ -30,8 +30,8 @@ The AI service is intentionally **stateless**. Java owns identity, persistence, 
 
 ```text
 ┌─────────────┐     JWT      ┌──────────────────────────────┐
-│  Client     │─────────────▶│  Spring Boot Backend (:8080) │
-│  (API/UI)   │              │  Auth · Chat · Doctors ·     │
+│  Frontend   │─────────────▶│  Spring Boot Backend (:8080) │
+│  React :5173│              │  Auth · Chat · Doctors ·     │
 └─────────────┘              │  Appointments · Slots        │
                              └──────────────┬───────────────┘
                                     │       │
@@ -63,6 +63,7 @@ The AI service is intentionally **stateless**. Java owns identity, persistence, 
 ```text
 VaidyaLink/
 ├── README.md                 ← you are here
+├── frontend/                 ← React + Vite SPA
 ├── backend/                  ← Spring Boot platform API
 │   ├── README.md
 │   ├── docker-compose.yml    ← Redis for local cache
@@ -141,12 +142,23 @@ $env:AI_TRIAGE_STUB="false"
 $env:AI_TRIAGE_URL="http://localhost:8000"
 ```
 
+### 4. Frontend (port `5173`)
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). Details: [`frontend/README.md`](frontend/README.md).
+
 ---
 
 ## Documentation
 
 | Doc | Contents |
 |---|---|
+| [`frontend/README.md`](frontend/README.md) | SPA routes, local run, env |
 | [`backend/README.md`](backend/README.md) | Full API matrix, security model, booking rules, config |
 | [`ai-triage-service/README.md`](ai-triage-service/README.md) | Graph design, request/response contract, local run |
 
@@ -169,7 +181,7 @@ $env:AI_TRIAGE_URL="http://localhost:8000"
 | Auth, doctors, appointments, slots | Implemented |
 | AI triage chat + specialty routing | Implemented |
 | Recommended doctors after triage | Implemented |
-| Frontend client | Planned |
+| Frontend client | Implemented (Vite + React) |
 | RAG over clinical knowledge | Deferred |
 
 ---

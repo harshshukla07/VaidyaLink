@@ -1,15 +1,17 @@
 package com.vaidyalink.backend.service;
 
-import com.vaidyalink.backend.entity.Doctor;
-import com.vaidyalink.backend.repository.DoctorRepository;
+import java.util.List;
+
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
-import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import com.vaidyalink.backend.entity.Doctor;
+import com.vaidyalink.backend.repository.DoctorRepository;
+
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 public class DoctorServiceImpl implements DoctorService{
@@ -36,9 +38,15 @@ public class DoctorServiceImpl implements DoctorService{
     }
 
     @Override
-    @CacheEvict(value = "doctors_page", allEntries = true)
+    @CacheEvict(value = {"doctors_page","distinct_specialities"}, allEntries = true)
     public Doctor registerNewDoctor(Doctor doctor) {
         return doctorRepository.save(doctor);
+    }
+
+    @Override
+    @Cacheable(value="distinct_specialities")
+    public List<String> getDistinctSpecialities() {
+        return doctorRepository.findDistinctSpecialities();
     }
 
 }

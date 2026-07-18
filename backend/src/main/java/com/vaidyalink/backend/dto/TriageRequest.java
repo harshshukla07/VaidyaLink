@@ -1,11 +1,11 @@
 package com.vaidyalink.backend.dto;
 
+import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
 
 @Data
 @AllArgsConstructor
@@ -14,4 +14,5 @@ import java.util.List;
 public class TriageRequest {
     private Long sessionId;
     private List<MessageDTO> messages;
+    private List<String> allowedSpecialties;
 }

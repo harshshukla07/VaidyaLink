@@ -27,6 +27,12 @@ public class DoctorController {
     }
 
     @PreAuthorize("hasAnyRole('PATIENT', 'DOCTOR')")
+    @GetMapping("/specialties")
+    public ResponseEntity<List<String>> getDistinctSpecialities() {
+        return ResponseEntity.ok(doctorService.getDistinctSpecialities());
+    }
+
+    @PreAuthorize("hasAnyRole('PATIENT', 'DOCTOR')")
     @GetMapping("/{id}")
     public ResponseEntity<DoctorResponse> getDoctorById(@PathVariable Long id){
         Doctor doctor = doctorService.getDoctorById(id);

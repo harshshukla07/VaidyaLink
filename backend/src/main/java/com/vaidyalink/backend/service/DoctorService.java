@@ -12,4 +12,5 @@ public interface DoctorService {
     Page<Doctor> getAllDoctors(Pageable pageable);
     Doctor getDoctorById(Long id);
     Doctor registerNewDoctor(Doctor doctor);
+    List<String> getDistinctSpecialities();
 }

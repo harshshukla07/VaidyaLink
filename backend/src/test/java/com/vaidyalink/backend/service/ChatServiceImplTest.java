@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -51,6 +52,9 @@ class ChatServiceImplTest {
 
     @Mock
     private AiTriageClient aiTriageClient;
+
+    @Mock
+    private DoctorService doctorService;
 
     @InjectMocks
     private ChatServiceImpl chatService;
@@ -133,7 +137,10 @@ class ChatServiceImplTest {
         expected.setAiReply("Tell me more about your symptoms");
         expected.setTriageComplete(false);
 
+        List<String> specialties = List.of("Cardiologist", "Dermatology", "General Physician");
+
         when(chatPersistenceHelper.savePatientMessage(10L, 1L, "I have a headache")).thenReturn(history);
+        when(doctorService.getDistinctSpecialities()).thenReturn(specialties);
         when(aiTriageClient.triage(any(TriageRequest.class))).thenReturn(triageResponse);
         when(chatPersistenceHelper.saveAiResponse(10L, triageResponse)).thenReturn(expected);
 
@@ -142,7 +149,10 @@ class ChatServiceImplTest {
         assertEquals("Tell me more about your symptoms", result.getAiReply());
         assertFalse(result.isTriageComplete());
         verify(chatPersistenceHelper, times(1)).savePatientMessage(10L, 1L, "I have a headache");
-        verify(aiTriageClient, times(1)).triage(any(TriageRequest.class));
+        verify(doctorService, times(1)).getDistinctSpecialities();
+        verify(aiTriageClient, times(1)).triage(argThat(req ->
+                req.getAllowedSpecialties() != null
+                        && req.getAllowedSpecialties().equals(specialties)));
         verify(chatPersistenceHelper, times(1)).saveAiResponse(10L, triageResponse);
     }
 }

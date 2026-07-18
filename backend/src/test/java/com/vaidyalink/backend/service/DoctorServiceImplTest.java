@@ -85,4 +85,16 @@ class DoctorServiceImplTest {
 
         assertEquals(1, result.getTotalElements());
     }
+
+    @Test
+    void getDistinctSpecialities_ShouldReturnDistinctList() {
+        when(doctorRepository.findDistinctSpecialities())
+                .thenReturn(List.of("Dermatology", "General Physician", "Orthopedics"));
+
+        List<String> result = doctorService.getDistinctSpecialities();
+
+        assertEquals(3, result.size());
+        assertEquals("Dermatology", result.get(0));
+        verify(doctorRepository).findDistinctSpecialities();
+    }
 }

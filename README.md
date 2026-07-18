@@ -1,111 +1,179 @@
-# VaidyaLink - Healthcare Appointment Platform
+# VaidyaLink
 
 ![Java](https://img.shields.io/badge/Java-21-blue)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.2-brightgreen)
-![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791)
-![Build](https://img.shields.io/badge/Build-Maven-C71A36)
+![Python](https://img.shields.io/badge/Python-3.12+-3776AB)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
+![LangGraph](https://img.shields.io/badge/LangGraph-AI%20Triage-1C3C3C)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791)
+![Redis](https://img.shields.io/badge/Redis-Cache-DC382D)
 ![Security](https://img.shields.io/badge/Auth-JWT-orange)
 
-VaidyaLink is a backend-first healthcare scheduling system built with Spring Boot. It models a realistic clinic workflow where patients discover doctors, book slots, and track appointment lifecycle with validation, role-based access, and business-rule enforcement.
+**AI-assisted healthcare appointment platform** — patients describe symptoms in chat, get routed to a specialty, and book a real doctor slot. Built as a clean separation between a Spring Boot platform API and a LangGraph triage microservice.
 
-This repository currently contains the backend service in `backend/`.
+---
 
-## Product Goal
+## Why this project
 
-The project focuses on moving beyond CRUD and implementing production-style scheduling constraints:
+Most appointment demos stop at CRUD. VaidyaLink models a realistic clinic path:
 
-- secure authentication and authorization
-- consistent API contracts with DTOs
-- validation at request boundaries
-- business logic in service layer
-- paginated retrieval and search for scale-ready APIs
+1. **Authenticate** as a patient or doctor (JWT + role-based access)
+2. **Triage** symptoms through a conversational AI flow (safety → completeness → specialty)
+3. **Discover** doctors for the recommended specialty
+4. **Book** a conflict-checked slot with lifecycle status (`PENDING` → `CONFIRMED` / `CANCELLED` / `COMPLETED`)
 
-## Key Features
+The AI service is intentionally **stateless**. Java owns identity, persistence, and specialty truth; Python owns reasoning.
 
-- JWT login flow with stateless Spring Security
-- Role-based endpoints for `PATIENT` and `DOCTOR`
-- Patient and doctor onboarding via auth APIs
-- Appointment booking with slot conflict checks
-- Appointment status lifecycle via enum (`PENDING`, `CONFIRMED`, `CANCELLED`, `COMPLETED`)
-- Available-slot generation (20-minute intervals)
-- Doctor-side appointment search (name/mobile)
-- Upcoming appointment retrieval for patients
-- Centralized exception handling for clean API errors
+---
 
 ## Architecture
 
 ```text
-Controller -> Service -> Repository -> PostgreSQL
+┌─────────────┐     JWT      ┌──────────────────────────────┐
+│  Client     │─────────────▶│  Spring Boot Backend (:8080) │
+│  (API/UI)   │              │  Auth · Chat · Doctors ·     │
+└─────────────┘              │  Appointments · Slots        │
+                             └──────────────┬───────────────┘
+                                    │       │
+                         PostgreSQL │       │ Redis cache
+                                    │       │
+                                    │       ▼
+                                    │  specialty allowlist
+                                    │  (from DB, cached)
+                                    │
+                                    ▼
+                             ┌──────────────────────────────┐
+                             │  AI Triage Service (:8000)   │
+                             │  FastAPI + LangGraph         │
+                             │  OpenAI (gpt-4o-mini)        │
+                             └──────────────────────────────┘
 ```
 
-- `controller`: API routes, request parsing, response shaping
-- `service`: business rules and orchestration
-- `repository`: Spring Data JPA query layer
-- `entity`: relational domain model
-- `dto`: request/response contracts
-- `security`: JWT auth, request filtering, role checks
-- `exception`: global error handling
+| Concern | Owned by |
+|---|---|
+| Auth, sessions, chat history, doctors, booking | Java / Spring Boot |
+| Symptom reasoning, follow-ups, specialty routing | Python / LangGraph |
+| Specialty allowlist source of truth | Database via Java |
+| Hot read caching (doctors, specialties) | Redis |
 
-## Tech Stack
+---
 
-- Java 21
-- Spring Boot 4.0.2
-- Spring Web MVC
-- Spring Data JPA
-- Spring Security
-- Jakarta Validation
-- JJWT (`io.jsonwebtoken`)
-- PostgreSQL
-- Lombok
-- Maven
-
-## Repository Layout
+## Repository layout
 
 ```text
 VaidyaLink/
-  backend/
-	src/main/java/com/vaidyalink/backend/
-	  controller/
-	  service/
-	  repository/
-	  entity/
-	  dto/
-	  security/
-	  exception/
-	src/main/resources/
-	  application.yml
-	  application-dev.yml
+├── README.md                 ← you are here
+├── backend/                  ← Spring Boot platform API
+│   ├── README.md
+│   ├── docker-compose.yml    ← Redis for local cache
+│   └── src/...
+└── ai-triage-service/        ← FastAPI + LangGraph microservice
+    ├── README.md
+    ├── requirements.txt
+    └── app/
+        ├── main.py
+        ├── graph/            ← LangGraph nodes + routing
+        ├── llm/              ← OpenAI client
+        └── schemas/          ← Pydantic contracts
 ```
 
-## API Overview
+---
 
-- Auth: `/api/auth/**`
-- Patient reads: `/api/patients/**`
-- Doctor reads: `/api/doctors/**`
-- Appointments: `/api/appointments/**`
+## Key capabilities
 
-See `backend/README.md` for full endpoint list, payloads, role matrix, and booking rules.
+### Platform (`backend/`)
+- JWT authentication with `PATIENT` / `DOCTOR` roles
+- Patient & doctor registration, `/api/auth/me`
+- Appointment booking with slot conflict and time-boundary rules
+- Doctor slot generation and available-slot queries
+- Redis-backed caching for doctor pages and distinct specialties
+- AI chat orchestration: persist messages, call triage, return recommended doctors
 
-## Local Run (Backend)
+### AI triage (`ai-triage-service/`)
+- LangGraph workflow: **safety → assess completeness → follow-up | route specialty**
+- Rule-based emergency keyword short-circuit
+- LLM follow-up questions when history is incomplete
+- Specialty choice constrained to Java-provided allowlist (fallback: General Physician)
+- Stub mode in Java for offline / test runs without Python or OpenAI
 
-From `backend/` set environment variables and start the app.
+---
+
+## Quick start
+
+### 1. Infrastructure
+
+```bash
+# PostgreSQL: create a database named vaidyalink
+# Redis (from backend/):
+cd backend
+docker compose up -d
+```
+
+### 2. Backend (port `8080`)
 
 ```powershell
+cd backend
 $env:DB_URL="jdbc:postgresql://localhost:5432/vaidyalink"
 $env:DB_USERNAME="postgres"
-$env:DB_PASSWORD="your_password_here"
+$env:DB_PASSWORD="your_password"
 $env:JWT_SECRET="your_base64_secret"
+$env:AI_TRIAGE_STUB="true"   # set false when Python service is running
 .\mvnw.cmd spring-boot:run
 ```
 
-## Reviewer Notes
+Swagger UI: [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
 
-- The codebase demonstrates end-to-end API lifecycle design (auth -> validation -> service rules -> persistence -> structured errors).
-- DTO usage prevents direct entity exposure for registration/login contracts.
-- Security is stateless and token-driven, suitable for SPA/mobile clients.
+### 3. AI triage service (port `8000`)
 
-## Important Configuration Note
+```powershell
+cd ai-triage-service
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env   # then set OPENAI_API_KEY
+uvicorn app.main:app --reload --port 8000
+```
 
-`application.yml` reads secrets via environment variables (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`). Use env vars for local and deployed setups; avoid committing credentials/secrets.
+Then point the backend at it:
 
+```powershell
+$env:AI_TRIAGE_STUB="false"
+$env:AI_TRIAGE_URL="http://localhost:8000"
+```
 
+---
+
+## Documentation
+
+| Doc | Contents |
+|---|---|
+| [`backend/README.md`](backend/README.md) | Full API matrix, security model, booking rules, config |
+| [`ai-triage-service/README.md`](ai-triage-service/README.md) | Graph design, request/response contract, local run |
+
+---
+
+## Design highlights (for reviewers)
+
+- **Clear service boundaries** — platform concerns stay in Java; LLM reasoning is isolated and replaceable
+- **Allowlist-driven routing** — AI cannot invent specialties that do not exist in the clinic roster
+- **Transactional chat persistence** — patient message saved before the AI call; AI reply saved after
+- **Testable AI integration** — `AiTriageClient` interface with stub + REST implementations
+- **Production-minded defaults** — secrets via env vars, Redis caching, centralized exception handling, OpenAPI
+
+---
+
+## Status
+
+| Area | State |
+|---|---|
+| Auth, doctors, appointments, slots | Implemented |
+| AI triage chat + specialty routing | Implemented |
+| Recommended doctors after triage | Implemented |
+| Frontend client | Planned |
+| RAG over clinical knowledge | Deferred |
+
+---
+
+## License
+
+Private / educational project unless otherwise noted.

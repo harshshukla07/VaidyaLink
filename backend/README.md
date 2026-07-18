@@ -2,194 +2,225 @@
 
 ![Java](https://img.shields.io/badge/Java-21-blue)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.2-brightgreen)
-![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791)
-![Build](https://img.shields.io/badge/Build-Maven-C71A36)
-![Security](https://img.shields.io/badge/Auth-JWT-orange)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791)
+![Redis](https://img.shields.io/badge/Redis-Cache-DC382D)
+![Maven](https://img.shields.io/badge/Build-Maven-C71A36)
+![JWT](https://img.shields.io/badge/Auth-JWT-orange)
 
-Backend service for a healthcare appointment platform where patients and doctors authenticate via JWT, access role-protected APIs, and manage appointments with business-rule enforcement.
+Spring Boot platform API for VaidyaLink: authentication, doctor discovery, appointment booking, slot management, and AI triage chat orchestration.
 
-## Table of Contents
+> Parent overview: [`../README.md`](../README.md) · AI service: [`../ai-triage-service/README.md`](../ai-triage-service/README.md)
 
-- [Implemented Scope](#implemented-scope)
-- [Tech Stack](#tech-stack)
+## Table of contents
+
+- [Scope](#scope)
+- [Tech stack](#tech-stack)
 - [Architecture](#architecture)
-- [Security Model](#security-model)
-- [Data Model](#data-model)
-- [Validation and Rules](#validation-and-rules)
-- [API Endpoints](#api-endpoints)
-- [Sample Requests](#sample-requests)
-- [Error Handling](#error-handling)
+- [Security](#security)
+- [AI triage integration](#ai-triage-integration)
+- [Caching](#caching)
+- [Domain model](#domain-model)
+- [Business rules](#business-rules)
+- [API reference](#api-reference)
+- [Sample payloads](#sample-payloads)
+- [Error handling](#error-handling)
 - [Configuration](#configuration)
-- [Run Locally](#run-locally)
-- [Troubleshooting Notes](#troubleshooting-notes)
+- [Run locally](#run-locally)
+- [Tests](#tests)
 
-## Implemented Scope
+## Scope
 
-- JWT-based authentication and role extraction (`ROLE_PATIENT`, `ROLE_DOCTOR`)
-- Public auth endpoints for registration and login
-- Protected patient and doctor read APIs
-- Appointment booking with conflict prevention and time validation
-- Appointment listing by patient/doctor with pagination
-- Date-filtered doctor appointment retrieval
-- Appointment status updates with terminal-state guardrails
-- Available-slot generation for doctor/day
-- Doctor-side appointment search by patient name/mobile
-- Patient-side upcoming appointments API
+- JWT auth with `ROLE_PATIENT` / `ROLE_DOCTOR`
+- Patient and doctor registration + `/api/auth/me`
+- Doctor listing, specialty filter, distinct specialties (cached)
+- Appointment booking, status lifecycle, search, upcoming list
+- Doctor shift slot generation + available-slot queries
+- Patient AI chat: session create/load, send message, triage orchestration
+- Pluggable AI client (`stub` for tests / offline, `REST` for the Python service)
 
-## Tech Stack
+## Tech stack
 
-- Java 21
-- Spring Boot 4.0.2
-- Spring Web MVC
-- Spring Data JPA
-- Spring Security
-- Jakarta Bean Validation
-- JJWT (`jjwt-api`, `jjwt-impl`, `jjwt-jackson`)
-- PostgreSQL
-- Lombok
-- Springdoc OpenAPI (Swagger UI)
-- Maven
+| Layer | Choice |
+|---|---|
+| Runtime | Java 21 |
+| Framework | Spring Boot 4.0.2 |
+| Web | Spring Web MVC |
+| Persistence | Spring Data JPA + PostgreSQL |
+| Cache | Spring Cache + Redis |
+| Security | Spring Security + JJWT |
+| Validation | Jakarta Bean Validation |
+| Docs | Springdoc OpenAPI (Swagger UI) |
+| Build | Maven Wrapper |
+| Tests | JUnit 5, Mockito, H2 |
 
 ## Architecture
 
 ```text
-Controller -> Service -> Repository -> PostgreSQL
+Controller  →  Service  →  Repository  →  PostgreSQL
+                 │
+                 ├─→ Redis (Spring Cache)
+                 └─→ AiTriageClient
+                        ├─ StubAiTriageClient   (AI_TRIAGE_STUB=true)
+                        └─ RestAiTriageClient   → Python :8000
 ```
 
-- `controller`: accepts HTTP requests and returns API responses
-- `service`: applies domain/business rules
-- `repository`: query abstraction through Spring Data JPA
-- `entity`: relational table mappings
-- `dto`: request/response contracts (`AppointmentRequest`, register/login DTOs)
-- `security`: JWT utility, auth filter, user loading, access config
-- `exception`: centralized JSON error responses
+Notable packages:
 
-## Security Model
+| Package | Responsibility |
+|---|---|
+| `controller` | HTTP surface, auth principal resolution |
+| `service` | Business rules and orchestration |
+| `client` | Outbound AI triage HTTP / stub |
+| `repository` | Spring Data JPA |
+| `entity` | Relational model |
+| `dto` | Request/response contracts (no entity leakage on public APIs) |
+| `security` | JWT filter, user details, method security |
+| `exception` | Centralized JSON error responses |
+| `config` | Security, Redis, RestClient beans |
+
+## Security
 
 ### Authentication
 
-- Login endpoint returns a JWT token and caller role.
-- Token is expected in `Authorization: Bearer <token>`.
-- App is stateless (`SessionCreationPolicy.STATELESS`).
+- Login returns a JWT + role
+- Clients send `Authorization: Bearer <token>`
+- Stateless sessions (`SessionCreationPolicy.STATELESS`)
+- Passwords stored with BCrypt
 
 ### Authorization
 
-- Public routes:
-  - `/api/auth/**`
-  - `/v3/api-docs/**`, `/swagger-ui/**`, `/swagger-ui.html`
-- All other endpoints require authentication.
-- Method-level role checks are enabled via `@EnableMethodSecurity` + `@PreAuthorize`.
+**Public**
+
+- `/api/auth/register/**`, `/api/auth/login`
+- `/v3/api-docs/**`, `/swagger-ui/**`
+
+**Authenticated** — all other `/api/**` routes, with method-level `@PreAuthorize` where needed.
+
+Chat endpoints resolve the patient from the JWT email (not from a client-supplied id), then enforce session ownership on send.
 
 ### CORS
 
-Configured allowed origins:
+Allowed origins: `http://localhost:3000`, `http://localhost:5173`  
+Methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
 
-- `http://localhost:3000`
-- `http://localhost:5173`
+## AI triage integration
 
-Allowed methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`.
+Chat flow on `POST /api/chat/send`:
 
-## Data Model
+1. Verify the session belongs to the authenticated patient
+2. Persist the patient message (+ load history)
+3. Load distinct specialties from DB (Redis-cached)
+4. Call `AiTriageClient.triage(...)` with messages + `allowedSpecialties`
+5. Persist the AI reply and session status
+6. If triage is complete (and not `Emergency`), attach matching `recommendedDoctors`
 
-### `Patient`
+Config (`application.yml`):
 
-- `id` (Long, PK)
-- `name`
-- `email` (unique)
-- `mobile` (unique)
-- `gender`
-- `age`
-- `password` (BCrypt-hashed)
+| Property / env | Default | Meaning |
+|---|---|---|
+| `ai.triage.base-url` / `AI_TRIAGE_URL` | `http://localhost:8000` | Python service URL |
+| `ai.triage.stub-enabled` / `AI_TRIAGE_STUB` | `true` | Use in-process stub (no Python/OpenAI) |
+| connect / read timeouts | `5s` / `30s` | RestClient timeouts |
 
-### `Doctor`
+## Caching
 
-- `id` (Long, PK)
-- `name`
-- `email` (unique)
-- `speciality`
-- `experience`
-- `password` (BCrypt-hashed)
+Redis-backed Spring Cache (`spring.cache.type=redis`, TTL 10m):
 
-### `Appointment`
+| Cache name | Used for |
+|---|---|
+| `doctors_page` | Paginated doctor list |
+| `distinct_specialities` | Specialty allowlist for triage + API |
 
-- `id` (Long, PK)
-- `patient` (`@ManyToOne` -> `patient_id`)
-- `doctor` (`@ManyToOne` -> `doctor_id`)
-- `appointmentDate` (`LocalDate`)
-- `appointmentTime` (`LocalTime`)
-- `status` (`AppointmentStatus` enum)
+Both are evicted when a new doctor is registered.
 
-## Validation and Rules
+Local Redis via Docker:
 
-### Request Validation
+```bash
+cd backend
+docker compose up -d
+```
 
-- Patient registration DTO:
-  - name required
-  - email required + valid format
-  - mobile required + exact 10 digits
-  - age must be `>= 0`
-  - password required
-- Doctor registration DTO:
-  - name required
-  - email required + valid format
-  - speciality required
-  - experience must be `>= 0`
-  - password required
-- Appointment request DTO:
-  - date must be present or future
-  - time required
+## Domain model
 
-### Appointment Booking Rules
+### Patient
+`id`, `name`, `email` (unique), `mobile` (unique), `gender`, `age`, `password` (BCrypt)
 
-- Appointment time is normalized to minute precision.
-- Same-day past time booking is blocked.
-- Allowed minute boundaries are fixed to `:00`, `:20`, `:40`.
-- Slot conflict check blocks duplicate doctor/date/time bookings (except cancelled).
-- Backend enforces initial status as `PENDING`.
+### Doctor
+`id`, `name`, `email` (unique), `speciality`, `experience`, `password` (BCrypt)
 
-### Status Transition Guard
+### Appointment
+`id`, `patient`, `doctor`, `appointmentDate`, `appointmentTime`, `status` (`PENDING` \| `CONFIRMED` \| `CANCELLED` \| `COMPLETED`)
 
-- If current status is `CANCELLED` or `COMPLETED`, status update is rejected.
+### DoctorSlot
+Persisted bookable slots for a doctor/day (generated from shift window + duration)
 
-## API Endpoints
+### ChatSession / ChatMessage
+Patient-owned triage conversation; messages store sender type + text (embedding column reserved for future RAG)
 
-### Auth (`/api/auth`)
+## Business rules
+
+### Registration validation
+- Patient: name, valid email, 10-digit mobile, age ≥ 0, password required
+- Doctor: name, valid email, speciality, experience ≥ 0, password required
+
+### Booking
+- Date must be today or future; same-day past times blocked
+- Times normalized to minute precision
+- Slot minutes constrained to `:00`, `:20`, `:40` (or generated slot grid)
+- Duplicate doctor/date/time blocked unless prior booking is cancelled
+- New bookings start as `PENDING`
+
+### Status updates
+- Terminal states `CANCELLED` / `COMPLETED` cannot be updated further
+
+## API reference
+
+### Auth — `/api/auth`
 
 | Method | Endpoint | Access | Purpose |
 |---|---|---|---|
 | `POST` | `/api/auth/register/patient` | Public | Register patient |
 | `POST` | `/api/auth/register/doctor` | Public | Register doctor |
-| `POST` | `/api/auth/login` | Public | Authenticate and receive JWT |
+| `POST` | `/api/auth/login` | Public | Login → JWT |
+| `GET` | `/api/auth/me` | Authenticated | Current user profile |
 
-### Patients (`/api/patients`)
-
-| Method | Endpoint | Access | Purpose |
-|---|---|---|---|
-| `GET` | `/api/patients/{id}` | `PATIENT`, `DOCTOR` | Get patient by ID |
-| `GET` | `/api/patients/all` | `DOCTOR` | List all patients |
-
-### Doctors (`/api/doctors`)
+### Patients — `/api/patients`
 
 | Method | Endpoint | Access | Purpose |
 |---|---|---|---|
-| `GET` | `/api/doctors/{id}` | `PATIENT`, `DOCTOR` | Get doctor by ID |
-| `GET` | `/api/doctors?speciality=Cardiologist` | `PATIENT`, `DOCTOR` | Filter by speciality |
-| `GET` | `/api/doctors/all` | `PATIENT`, `DOCTOR` | List all doctors |
+| `GET` | `/api/patients/{id}` | `PATIENT`, `DOCTOR` | Get patient |
+| `GET` | `/api/patients/all` | `DOCTOR` | List patients |
 
-### Appointments (`/api/appointments`)
+### Doctors — `/api/doctors`
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/api/doctors/specialties` | `PATIENT`, `DOCTOR` | Distinct specialties |
+| `GET` | `/api/doctors/{id}` | `PATIENT`, `DOCTOR` | Get doctor |
+| `GET` | `/api/doctors?speciality=…` | `PATIENT`, `DOCTOR` | Filter by specialty |
+| `GET` | `/api/doctors/all` | `PATIENT`, `DOCTOR` | List doctors (paged/cached) |
+| `POST` | `/api/doctors/{doctorId}/slots/generate` | Authenticated | Generate day slots |
+
+### Appointments — `/api/appointments`
 
 | Method | Endpoint | Access | Purpose |
 |---|---|---|---|
 | `POST` | `/api/appointments/book` | `PATIENT` | Book appointment |
-| `GET` | `/api/appointments/patient/{patientId}?page=0&size=10` | `PATIENT`, `DOCTOR` | Patient appointments (paged) |
-| `GET` | `/api/appointments/patient/{patientId}/upcoming?page=0&size=10` | `PATIENT` | Upcoming patient appointments |
-| `GET` | `/api/appointments/doctor/{doctorId}?page=0&size=10` | `DOCTOR` | Doctor appointments (paged) |
-| `GET` | `/api/appointments/doctor/{doctorId}?date=2026-03-14&page=0&size=10` | `DOCTOR` | Doctor appointments by date |
-| `PATCH` | `/api/appointments/{appointmentId}/status?status=CONFIRMED` | `PATIENT`, `DOCTOR` | Update appointment status |
-| `GET` | `/api/appointments/doctor/{doctorId}/available-slots?date=2026-03-14` | `PATIENT`, `DOCTOR` | Get available slots |
-| `GET` | `/api/appointments/doctor/{doctorId}/search?query=rahul&page=0&size=10` | `DOCTOR` | Search appointments |
+| `GET` | `/api/appointments/patient/{patientId}` | `PATIENT`, `DOCTOR` | Patient appointments (paged) |
+| `GET` | `/api/appointments/patient/{patientId}/upcoming` | `PATIENT` | Upcoming appointments |
+| `GET` | `/api/appointments/doctor/{doctorId}` | `DOCTOR` | Doctor appointments (optional `date`) |
+| `PATCH` | `/api/appointments/{id}/status?status=` | `PATIENT`, `DOCTOR` | Update status |
+| `GET` | `/api/appointments/doctor/{doctorId}/available-slots` | `PATIENT`, `DOCTOR` | Open slots for a date |
+| `GET` | `/api/appointments/doctor/{doctorId}/search` | `DOCTOR` | Search by patient name/mobile |
 
-## Sample Requests
+### Chat — `/api/chat`
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/api/chat/session` | `PATIENT` | Get or create triage session + history |
+| `POST` | `/api/chat/send` | `PATIENT` | Send message → AI reply (+ doctors when complete) |
+
+## Sample payloads
 
 ### Register patient
 
@@ -204,18 +235,6 @@ Allowed methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`.
 }
 ```
 
-### Register doctor
-
-```json
-{
-  "name": "Dr. Mehta",
-  "email": "mehta@example.com",
-  "speciality": "Cardiologist",
-  "experience": 10,
-  "password": "mehta@123"
-}
-```
-
 ### Login
 
 ```json
@@ -225,46 +244,102 @@ Allowed methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`.
 }
 ```
 
+### Send chat message
+
+```json
+{
+  "sessionId": 1,
+  "messageText": "I have had a mild headache for two days, no fever."
+}
+```
+
+Example response when triage completes:
+
+```json
+{
+  "sessionId": 1,
+  "aiReply": "Based on your symptoms, a General Physician is a good next step.",
+  "triageComplete": true,
+  "recommendedSpecialty": "General Physician",
+  "recommendedDoctors": [
+    {
+      "id": 2,
+      "name": "Dr. Mehta",
+      "email": "mehta@example.com",
+      "speciality": "General Physician",
+      "experience": 10
+    }
+  ]
+}
+```
+
 ### Book appointment
 
 ```json
 {
   "patientId": 5,
   "doctorId": 2,
-  "appointmentDate": "2026-03-20",
+  "appointmentDate": "2026-07-20",
   "appointmentTime": "10:20:00"
 }
 ```
 
-## Error Handling
+### Generate slots
 
-`GlobalExceptionHandler` maps key exceptions to clean JSON messages:
+```json
+{
+  "date": "2026-07-20",
+  "shiftStartTime": "09:00:00",
+  "shiftEndTime": "13:00:00",
+  "durationInMinutes": 20
+}
+```
 
-- `MethodArgumentNotValidException` -> `400 Bad Request`
-- `DataIntegrityViolationException` -> `409 Conflict`
-- `MethodArgumentTypeMismatchException` -> `400 Bad Request`
-- `IllegalStateException` -> `400 Bad Request`
-- `EntityNotFoundException` -> `404 Not Found`
-- `HttpRequestMethodNotSupportedException` -> `405 Method Not Allowed`
-- `AccessDeniedException` -> `403 Forbidden`
-- fallback `Exception` -> `500 Internal Server Error`
+## Error handling
+
+`GlobalExceptionHandler` maps exceptions to consistent JSON:
+
+| Exception | Status |
+|---|---|
+| `MethodArgumentNotValidException` | `400` |
+| `IllegalStateException` / type mismatch | `400` |
+| `AccessDeniedException` | `403` |
+| `EntityNotFoundException` | `404` |
+| `HttpRequestMethodNotSupportedException` | `405` |
+| `DataIntegrityViolationException` | `409` |
+| AI triage client failures | `503` (when Rest client is active) |
+| Unhandled `Exception` | `500` |
 
 ## Configuration
 
-`src/main/resources/application.yml` expects:
+Required environment variables:
 
-- `DB_URL`
-- `DB_USERNAME`
-- `DB_PASSWORD`
-- `JWT_SECRET` (Base64-encoded secret)
+| Variable | Purpose |
+|---|---|
+| `DB_URL` | JDBC URL, e.g. `jdbc:postgresql://localhost:5432/vaidyalink` |
+| `DB_USERNAME` | DB user |
+| `DB_PASSWORD` | DB password |
+| `JWT_SECRET` | Base64-encoded HMAC secret |
 
-## Run Locally
+Optional:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | `prod` | Active profile |
+| `PORT` | `8080` | HTTP port |
+| `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Cache |
+| `AI_TRIAGE_URL` | `http://localhost:8000` | Python service |
+| `AI_TRIAGE_STUB` | `true` | Stub vs REST client |
+
+Secrets belong in environment variables or a gitignored local profile (`application-dev.yml`). Do not commit credentials.
+
+## Run locally
 
 ### Prerequisites
 
 - Java 21
-- PostgreSQL running
-- A database created (example: `vaidyalink`)
+- PostgreSQL with a `vaidyalink` database
+- Redis (`docker compose up -d` from this folder)
 
 ### Windows PowerShell
 
@@ -273,26 +348,37 @@ $env:DB_URL="jdbc:postgresql://localhost:5432/vaidyalink"
 $env:DB_USERNAME="postgres"
 $env:DB_PASSWORD="your_password_here"
 $env:JWT_SECRET="your_base64_secret"
+$env:AI_TRIAGE_STUB="true"
 .\mvnw.cmd spring-boot:run
 ```
 
-### Linux/macOS
+### Linux / macOS
 
 ```bash
 export DB_URL="jdbc:postgresql://localhost:5432/vaidyalink"
 export DB_USERNAME="postgres"
 export DB_PASSWORD="your_password_here"
 export JWT_SECRET="your_base64_secret"
+export AI_TRIAGE_STUB="true"
 ./mvnw spring-boot:run
 ```
 
 ### OpenAPI
 
-- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
-- OpenAPI docs: `http://localhost:8080/v3/api-docs`
+- Swagger UI: http://localhost:8080/swagger-ui/index.html
+- OpenAPI JSON: http://localhost:8080/v3/api-docs
 
-## Troubleshooting Notes
+## Tests
 
-- If you add new fields (for example `appointmentTime`) after table creation, keep DB schema synchronized before testing APIs.
-- Keep secrets in environment variables; do not commit production credentials/secrets.
-- If auth fails unexpectedly, verify Bearer token format and role constraints on the target endpoint.
+```powershell
+.\mvnw.cmd test
+```
+
+Unit tests cover services, stub AI client, and chat orchestration (including specialty allowlist wiring). Integration tests use H2 and disable Redis autoconfig via `application-test.yml`.
+
+## Troubleshooting
+
+- **Auth 403** — confirm Bearer token and `@PreAuthorize` role on the endpoint
+- **Cache misses / Redis errors** — ensure Redis is running on `6379`
+- **AI 503** — if `AI_TRIAGE_STUB=false`, confirm the Python service is up at `AI_TRIAGE_URL`
+- **Schema drift** — Hibernate `ddl-auto=update` helps locally; keep migrations intentional for production

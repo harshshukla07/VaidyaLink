@@ -47,10 +47,12 @@ Keeping LLM reasoning out of Spring Boot gives:
 - Specialty recommendation within an allowlist (LLM + validation)
 
 ### This service does **not** own
-- User authentication or JWT validation (today)
+- End-user authentication or JWT validation (that stays in Spring Boot)
 - Chat session persistence (Java stores history and resends it each call)
 - Doctor search or booking
 - Inventing specialties that are not on the allowlist
+
+It **does** optionally enforce a shared service API key (`AI_TRIAGE_API_KEY` / `X-API-Key`) so only the backend can call triage. That is machine-to-machine auth, not patient/doctor login.
 
 Every HTTP call is **self-contained**: full message history in, triage decision out.
 
@@ -136,15 +138,16 @@ ai-triage-service/
 ├── README.md
 ├── requirements.txt
 ├── pytest.ini
-├── .env.example
+├── .env.example             # OPENAI_* + AI_TRIAGE_API_KEY placeholders
 ├── .gitignore
 ├── tests/
 │   ├── conftest.py          # FakeLLM helpers + fixtures
 │   ├── test_nodes.py
 │   ├── test_graph.py
-│   └── test_api.py
+│   └── test_api.py          # includes API-key 401 / success paths
 └── app/
     ├── main.py              # FastAPI, validation, exception handlers
+    ├── security.py          # optional X-API-Key dependency
     ├── errors.py
     ├── llm/client.py
     ├── schemas/
@@ -170,6 +173,8 @@ ai-triage-service/
 ```
 
 ### `POST /api/ai/triage`
+
+**Auth:** when `AI_TRIAGE_API_KEY` is set, send header `X-API-Key: <same value>`. Missing or wrong key → `401`.
 
 **Request** (camelCase accepted via Pydantic aliases):
 
@@ -239,6 +244,9 @@ copy .env.example .env
 |---|---|---|---|
 | `OPENAI_API_KEY` | Yes (live LLM) | — | OpenAI API key |
 | `OPENAI_MODEL` | No | `gpt-4o-mini` | Chat model name |
+| `AI_TRIAGE_API_KEY` | Recommended (required when set) | empty | Shared secret with Spring Boot (`X-API-Key` header) |
+
+When `AI_TRIAGE_API_KEY` is set, `POST /api/ai/triage` requires header `X-API-Key: <same value>`. `/health` stays public. If the env var is empty, auth is skipped (local convenience only).
 
 `.env` is gitignored. Never commit real keys.
 
@@ -277,12 +285,19 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ### Wire to Spring Boot
 
+1. Put the same shared secret in both places:
+   - AI service `.env` → `AI_TRIAGE_API_KEY=...`
+   - Backend env → `AI_TRIAGE_API_KEY=...` (maps to `ai.triage.api-key`)
+2. Start this service on `:8000`
+3. Restart Spring Boot with stub mode off:
+
 ```powershell
 $env:AI_TRIAGE_STUB="false"
 $env:AI_TRIAGE_URL="http://localhost:8000"
+$env:AI_TRIAGE_API_KEY="your_shared_secret"
 ```
 
-Restart the backend so `RestAiTriageClient` is active.
+`RestAiTriageClient` then posts to `/api/ai/triage` with `X-API-Key`. Leave the key empty on **both** sides only for throwaway local demos.
 
 > Note: on Windows, uvicorn `--reload` can print a noisy `KeyboardInterrupt` traceback during hot reload. If `Application startup complete` appears afterward, the server is fine.
 
@@ -290,6 +305,7 @@ Restart the backend so `RestAiTriageClient` is active.
 
 | Status | When |
 |---|---|
+| `401` | Missing/invalid `X-API-Key` when `AI_TRIAGE_API_KEY` is configured |
 | `400` | Empty `messages`, or no non-blank `PATIENT` text |
 | `503` | Missing `OPENAI_API_KEY`, provider failure, or unexpected graph failure |
 
@@ -306,9 +322,9 @@ pytest
 |---|---|
 | `tests/test_nodes.py` | Emergency boundaries, topic guard (incl. history regression), structured nodes |
 | `tests/test_graph.py` | Emergency / injection / follow-up / route paths |
-| `tests/test_api.py` | Health, validation 400, LLM 503, success + jailbreak HTTP |
+| `tests/test_api.py` | Health, validation 400, LLM 503, success + jailbreak HTTP, API-key auth |
 
-LLM calls are mocked (`FakeLLM`) — no API key required in CI or local test runs.
+LLM calls are mocked (`FakeLLM`) — no OpenAI key required in CI or local test runs. API-key tests set `AI_TRIAGE_API_KEY` in the test environment when needed.
 
 ## Design notes
 
@@ -331,7 +347,7 @@ LLM calls are mocked (`FakeLLM`) — no API key required in CI or local test run
 | Conversation context (patient + AI history) | Done |
 | Jailbreak / off-topic guard (latest-message) | Done |
 | Word-boundary emergency matching | Done |
-| Internal service auth (shared API key with Java) | Planned |
+| Internal service auth (shared API key with Java) | Done |
 | Dockerfile + structured request logging (`sessionId`) | Planned |
 | RAG / clinical knowledge base | Planned |
 | Graph checkpointing in Python | Deferred (Java owns history) |

@@ -1,9 +1,10 @@
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.errors import LlmServiceError, TriageValidationError
 from app.graph.builder import graph
 from app.schemas.triage import TriageRequest, TriageResponse
+from app.security import verify_api_key
 
 app = FastAPI(
     title="VaidyaLink AI Triage Service",
@@ -50,7 +51,7 @@ def health_check():
     }
 
 
-@app.post("/api/ai/triage")
+@app.post("/api/ai/triage", dependencies=[Depends(verify_api_key)])
 def triage(request: TriageRequest) -> TriageResponse:
     _validate_triage_request(request)
 

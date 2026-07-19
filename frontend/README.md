@@ -5,7 +5,7 @@
 ![Vite](https://img.shields.io/badge/Vite-Dev%20Server-646CFF)
 ![Router](https://img.shields.io/badge/React%20Router-6-CA4245)
 
-React + TypeScript single-page application for VaidyaLink. It is a thin JWT client over the Spring Boot platform API: patients triage symptoms and book doctors; doctors manage schedules and slots.
+React + TypeScript single-page application for VaidyaLink. It is a thin JWT client over the Spring Boot platform API: patients triage symptoms and book doctors; doctors manage schedules and slots. The UI stays deliberately simple — presentation and navigation live here; business rules and AI reasoning stay in the backend and Python services.
 
 > Parent overview: [`../README.md`](../README.md) · Backend: [`../backend/README.md`](../backend/README.md) · AI: [`../ai-triage-service/README.md`](../ai-triage-service/README.md)
 
@@ -21,11 +21,12 @@ React + TypeScript single-page application for VaidyaLink. It is a thin JWT clie
 - [Run locally](#run-locally)
 - [Build](#build)
 - [How triage appears in the UI](#how-triage-appears-in-the-ui)
+- [Known gaps](#known-gaps)
 
 ## What this app does
 
 ### For patients
-- Register / login
+- Register / login and land on a care home with clear next steps
 - Start or resume an AI **symptom triage** conversation
 - When triage completes, see **recommended specialty + matching doctors**
 - Browse doctors by specialty, open booking, pick an available slot
@@ -33,13 +34,13 @@ React + TypeScript single-page application for VaidyaLink. It is a thin JWT clie
 
 ### For doctors
 - Login to a doctor workspace
-- Review appointments and update status
+- Review appointments and update status (`PENDING` → `CONFIRMED` / `CANCELLED` / `COMPLETED`)
 - Generate availability slots for a given day and shift window
 
-The frontend does **not** call the Python AI service directly. All triage traffic goes:
+The frontend does **not** call the Python AI service directly, and it never holds the AI service API key. All triage traffic goes:
 
 ```text
-Browser → Spring Boot (/api/chat/*) → AI triage service (:8000)
+Browser → Spring Boot (/api/chat/*, JWT) → AI triage service (:8000, X-API-Key)
 ```
 
 ## Tech stack
@@ -166,6 +167,8 @@ Open http://localhost:5173
 4. Choose a recommended doctor → book a slot
 5. Login as doctor → confirm the appointment / generate more slots
 
+If triage replies look stubby or always recommend the same path, the backend is probably still on `AI_TRIAGE_STUB=true`. See the [backend README](../backend/README.md) for live AI mode.
+
 ## Build
 
 ```powershell
@@ -173,7 +176,7 @@ npm run build
 npm run preview
 ```
 
-Production assets are emitted to `frontend/dist/`.
+Production assets are emitted to `frontend/dist/`. Serve that folder behind any static host, or use `npm run preview` for a local smoke check.
 
 ## How triage appears in the UI
 
@@ -185,4 +188,12 @@ On `/chat`:
 4. When complete, the UI shows the recommended specialty and a list of doctors (unless the specialty is `Emergency`)
 5. Off-topic / jailbreak redirects from the AI service still return `triageComplete: false`, so the patient can continue with real symptoms
 
-For graph details (safety, topic guard, structured LLM outputs), see the [AI triage README](../ai-triage-service/README.md).
+Backend failures during live triage typically surface as an error state on send (often from a **503** when the Python service is down, misconfigured, or rejecting the shared API key).
+
+For graph details (safety, topic guard, structured LLM outputs, API-key auth), see the [AI triage README](../ai-triage-service/README.md).
+
+## Known gaps
+
+- No automated frontend test suite yet (`*.test.*` / Vitest / Playwright)
+- No production Docker image for the SPA in this repo (Vite `build` + static hosting is the current path)
+- Auth token storage is client-side; treat local demos accordingly and avoid sharing browser profiles with real credentials

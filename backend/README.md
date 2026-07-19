@@ -8,7 +8,7 @@
 ![JWT](https://img.shields.io/badge/Auth-JWT-orange)
 ![OpenAPI](https://img.shields.io/badge/Docs-Swagger-85EA2D)
 
-Spring Boot **platform API** for VaidyaLink. This service is the system of record for users, doctors, appointments, slots, and chat history. It also orchestrates AI triage by calling (or stubbing) the Python LangGraph microservice, then attaching recommended doctors when routing completes.
+Spring Boot **platform API** for VaidyaLink. This service is the system of record for users, doctors, appointments, slots, and chat history. It also orchestrates AI triage by calling (or stubbing) the Python LangGraph microservice — optionally authenticated with a shared `X-API-Key` — then attaching recommended doctors when routing completes.
 
 > Parent: [`../README.md`](../README.md) · Frontend: [`../frontend/README.md`](../frontend/README.md) · AI: [`../ai-triage-service/README.md`](../ai-triage-service/README.md)
 
@@ -95,7 +95,7 @@ Typical chat request:
 | `dto` | Request/response contracts (entities are not exposed raw on public APIs) |
 | `security` | JWT util, filter, `UserDetailsService`, security filter chain |
 | `exception` | `GlobalExceptionHandler` → consistent JSON errors |
-| `config` | Security, Redis, RestClient, cache, OpenAPI beans |
+| `config` | Security, Redis, OpenAPI, cache, `AiTriageProperties` + AI `RestClient` |
 
 ## Security
 
@@ -130,14 +130,25 @@ Methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
 
 ## AI triage integration
 
+The backend never calls OpenAI directly. Chat orchestration goes through `AiTriageClient`, which has two implementations selected by configuration.
+
 ### Client switch
 
 | Env | Behavior |
 |---|---|
-| `AI_TRIAGE_STUB=true` (default) | In-process stub — no Python/OpenAI needed |
+| `AI_TRIAGE_STUB=true` (default) | In-process `StubAiTriageClient` — no Python/OpenAI needed; useful for demos and unit tests |
 | `AI_TRIAGE_STUB=false` | `RestAiTriageClient` → `AI_TRIAGE_URL` (default `http://localhost:8000`) |
 
-Timeouts (configurable in `application.yml`): connect `5s`, read `30s`.
+Configuration lives in `AiTriageProperties` (`ai.triage.*`) and `AiTriageConfig`, which builds a dedicated `RestClient` bean when stub mode is off.
+
+| Property | Env / YAML | Default | Purpose |
+|---|---|---|---|
+| Base URL | `AI_TRIAGE_URL` / `ai.triage.base-url` | `http://localhost:8000` | Python service origin |
+| Stub flag | `AI_TRIAGE_STUB` / `ai.triage.stub-enabled` | `true` | Stub vs live REST |
+| API key | `AI_TRIAGE_API_KEY` / `ai.triage.api-key` | empty | Sent as `X-API-Key` when non-blank |
+| Connect / read timeouts | `ai.triage.connect-timeout` / `read-timeout` | `5s` / `30s` | `RestClient` timeouts |
+
+When `ai.triage.api-key` is set, every outbound triage call includes `X-API-Key`. Use the **same** value as `AI_TRIAGE_API_KEY` in the Python service `.env`.
 
 ### Request shape sent to Python
 
@@ -152,9 +163,10 @@ Timeouts (configurable in `application.yml`): connect `5s`, read `30s`.
 | Follow-up / off-topic (`is_complete=false`) | Save AI text; session stays active |
 | Specialty route (`is_complete=true`) | Save AI text; mark triage; attach `recommendedDoctors` (skip if specialty is `Emergency`) |
 | Emergency | Save AI text; no doctor list |
+| Auth failure (`401`) | Surfaces as triage client failure → **503** when REST client is active |
 | HTTP / timeout failures | Mapped to **503** when REST client is active |
 
-See the [AI triage README](../ai-triage-service/README.md) for graph nodes (safety, topic guard, structured outputs).
+See the [AI triage README](../ai-triage-service/README.md) for graph nodes (safety, topic guard, structured outputs, API-key auth).
 
 ## Caching
 
@@ -367,6 +379,7 @@ Example response when triage completes:
 | `REDIS_PASSWORD` / `REDIS_SSL` | empty / `false` | Redis auth / TLS |
 | `AI_TRIAGE_URL` | `http://localhost:8000` | Python service |
 | `AI_TRIAGE_STUB` | `true` | Stub vs REST client |
+| `AI_TRIAGE_API_KEY` | empty | Shared secret sent as `X-API-Key` to Python (set the same value in the AI service `.env`) |
 
 Secrets belong in environment variables or a **gitignored** local profile (`application-dev.yml`). Do not commit credentials.
 
@@ -407,9 +420,9 @@ export AI_TRIAGE_STUB="true"
 
 ### Live AI mode
 
-1. Start `ai-triage-service` on `:8000`
-2. Set `AI_TRIAGE_STUB=false` and optionally `AI_TRIAGE_URL`
-3. Restart this backend
+1. Start `ai-triage-service` on `:8000` with `AI_TRIAGE_API_KEY` set in its `.env`
+2. Set the **same** key on the backend: `AI_TRIAGE_API_KEY`, plus `AI_TRIAGE_STUB=false` (and optionally `AI_TRIAGE_URL`)
+3. Restart this backend — `RestClient` sends `X-API-Key` on every triage call
 
 ## Tests
 
@@ -419,12 +432,15 @@ export AI_TRIAGE_STUB="true"
 
 Coverage includes services, stub AI client, chat orchestration (specialty allowlist wiring), and doctor specialty queries. Integration-style tests use H2 and disable Redis autoconfiguration via `src/test/resources/application-test.yml`.
 
+Still light: dedicated tests for `RestAiTriageClient` (WireMock / MockWebServer) and controller-level security integration tests.
+
 ## Troubleshooting
 
 | Symptom | Likely fix |
 |---|---|
 | Auth `403` | Check Bearer token and `@PreAuthorize` role |
 | Redis / cache errors | Ensure Redis is running on `6379` |
-| AI `503` | If stub is off, confirm Python is up at `AI_TRIAGE_URL` |
+| AI `503` | If stub is off, confirm Python is up at `AI_TRIAGE_URL`, and that both sides share the same `AI_TRIAGE_API_KEY` (or both leave it empty) |
+| AI key mismatch | Python returns `401`; backend surfaces that as a triage failure (`503` to the patient-facing API) |
 | Schema drift after entity changes | Hibernate `ddl-auto=update` helps locally; use intentional migrations for production |
 | Chat returns off-topic loop after jailbreak | Fixed in AI service (latest-message topic guard); update/redeploy Python service |

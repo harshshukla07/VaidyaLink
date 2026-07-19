@@ -69,7 +69,7 @@ Design principle: the AI service is **stateless**. Java owns identity, chat hist
                                            │  distinct specialties
                                            │  (allowlist for AI)
                                            │
-                                           ▼  HTTP (RestClient)
+                                           ▼  HTTP + X-API-Key
                                    ┌────────────────────────────────┐
                                    │  AI Triage Service (:8000)     │
                                    │  FastAPI + LangGraph           │
@@ -83,6 +83,7 @@ Design principle: the AI service is **stateless**. Java owns identity, chat hist
 | Chat sessions & message history | Java | Persistence + ownership checks |
 | Specialty allowlist | Java (DB + Redis cache) | AI must not invent specialties |
 | Symptom reasoning & routing | Python | Isolated LLM graph, easy to iterate |
+| Service-to-service auth | Shared `AI_TRIAGE_API_KEY` | Backend sends `X-API-Key`; Python verifies when configured |
 | UI | React | Thin client over JWT APIs |
 
 ### Chat orchestration (happy path)
@@ -118,6 +119,7 @@ VaidyaLink/
 │       ├── controller/
 │       ├── service/
 │       ├── client/                ← AiTriageClient (stub + REST)
+│       ├── config/                ← AiTriageProperties, RestClient, security
 │       ├── security/
 │       ├── entity/ · dto/ · repository/
 │       └── exception/
@@ -125,9 +127,11 @@ VaidyaLink/
 └── ai-triage-service/             ← FastAPI + LangGraph microservice
     ├── README.md
     ├── requirements.txt
+    ├── .env.example
     ├── tests/                     ← pytest (mocked LLM)
     └── app/
         ├── main.py
+        ├── security.py            ← optional X-API-Key guard
         ├── errors.py
         ├── graph/                 ← nodes, builder, constants
         ├── llm/
@@ -152,6 +156,7 @@ VaidyaLink/
 - Doctor slot generation and available-slot queries
 - Redis-backed caches for doctor pages and distinct specialties
 - Pluggable AI client: stub (default) or REST to Python
+- Shared API key forwarded as `X-API-Key` when `AI_TRIAGE_API_KEY` is set
 - OpenAPI / Swagger UI for interactive exploration
 
 ### AI triage
@@ -161,7 +166,8 @@ VaidyaLink/
 - Full conversation context (`PATIENT` + `AI_BOT`) to avoid repeated questions
 - Structured LLM outputs via Pydantic (`with_structured_output`)
 - Allowlist + General Physician fallback
-- HTTP `400` / `503` for validation and LLM failures
+- Optional internal auth via `AI_TRIAGE_API_KEY` (`X-API-Key` on triage; `/health` public)
+- HTTP `400` / `401` / `503` for validation, auth, and LLM failures
 - pytest suite with mocked OpenAI
 
 ---
@@ -207,16 +213,19 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 copy .env.example .env
-# set OPENAI_API_KEY in .env
+# set OPENAI_API_KEY and (recommended) AI_TRIAGE_API_KEY in .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-Then restart the backend with:
+Then restart the backend with the **same** shared key:
 
 ```powershell
 $env:AI_TRIAGE_STUB="false"
 $env:AI_TRIAGE_URL="http://localhost:8000"
+$env:AI_TRIAGE_API_KEY="your_shared_secret"
 ```
+
+If `AI_TRIAGE_API_KEY` is empty on both sides, triage auth is skipped (local convenience only). For anything beyond localhost, set a non-empty shared secret on both services.
 
 ### 4. Frontend (`:5173`)
 
@@ -240,9 +249,9 @@ VITE_API_BASE_URL=http://localhost:8080
 
 | Document | Audience | Contents |
 |---|---|---|
-| [`frontend/README.md`](frontend/README.md) | UI / fullstack | Routes, auth flow, env, scripts |
+| [`frontend/README.md`](frontend/README.md) | UI / fullstack | Routes, auth flow, env, scripts, triage UX |
 | [`backend/README.md`](backend/README.md) | Backend | Security, domain model, full API matrix, booking rules, AI client, config |
-| [`ai-triage-service/README.md`](ai-triage-service/README.md) | AI / ML eng | Graph design, schemas, guards, errors, tests, roadmap |
+| [`ai-triage-service/README.md`](ai-triage-service/README.md) | AI / ML eng | Graph design, schemas, guards, API-key auth, errors, tests, roadmap |
 
 ---
 
@@ -253,6 +262,7 @@ VITE_API_BASE_URL=http://localhost:8080
 - **Hardened triage graph** — emergency rules, jailbreak guard, structured outputs, conversation-aware follow-ups
 - **Transactional chat persistence** — patient message saved before the AI call; AI reply saved after
 - **Testable AI integration** — Java `AiTriageClient` (stub + REST); Python pytest with mocked LLM
+- **Internal service auth** — optional shared API key between Spring Boot and FastAPI
 - **Production-minded defaults** — secrets via env vars / gitignored profiles, Redis caching, OpenAPI, global exception handling
 
 ---
@@ -266,9 +276,17 @@ VITE_API_BASE_URL=http://localhost:8080
 | Triage hardening (structured outputs, topic guard, emergency boundaries, tests) | Implemented |
 | Recommended doctors after triage | Implemented |
 | Frontend (Vite + React) | Implemented |
-| Internal AI service auth (shared API key) | Planned |
+| Internal AI service auth (shared API key / `X-API-Key`) | Implemented |
 | Dockerfile / deploy packaging for AI service | Planned |
+| Monorepo CI / full-stack docker-compose | Planned |
 | RAG over clinical knowledge | Deferred |
+
+### Still on the roadmap
+
+- Package the AI service for deploy (Dockerfile) and optionally compose all three services together
+- Broader automated tests (`RestAiTriageClient`, frontend)
+- Structured request logging with `sessionId` in Python
+- RAG / clinical knowledge (embedding column exists but unused)
 
 ---
 
@@ -277,7 +295,9 @@ VITE_API_BASE_URL=http://localhost:8080
 - Never commit `.env`, `application-dev.yml`, or real API keys (covered by root / service `.gitignore`)
 - JWT secret and DB password must come from environment variables
 - Chat endpoints resolve the patient from the JWT — clients do not pick arbitrary patient IDs for triage
-- The AI service currently has **no** internal API-key auth (planned); keep it on localhost or behind a private network for now
+- When `AI_TRIAGE_API_KEY` is set, Python requires a matching `X-API-Key` on `POST /api/ai/triage`; `/health` stays public
+- If the key is left empty, auth is skipped — fine for quick local demos, not for a network-exposed AI service
+- Keep the AI service on localhost or a private network even with a key; it is an internal microservice, not a public browser API
 
 ---
 

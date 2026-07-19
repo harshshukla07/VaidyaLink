@@ -2,6 +2,8 @@ import pytest
 
 from app.schemas.llm import CompletenessAssessment, FollowUpQuestion, SpecialtyChoice
 
+TEST_API_KEY = "test-triage-api-key"
+
 
 class FakeStructuredLLM:
     def __init__(self, result):

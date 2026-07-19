@@ -2,7 +2,6 @@ package com.vaidyalink.backend.security;
 
 import java.util.Collections;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -18,11 +17,14 @@ import com.vaidyalink.backend.repository.PatientRepository;
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
 
-    @Autowired
-    private DoctorRepository doctorRepository;
+    private final DoctorRepository doctorRepository;
+    private final PatientRepository patientRepository;
 
-    @Autowired
-    private PatientRepository patientRepository;
+    public CustomUserDetailsService(DoctorRepository doctorRepository,
+                                    PatientRepository patientRepository) {
+        this.doctorRepository = doctorRepository;
+        this.patientRepository = patientRepository;
+    }
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {

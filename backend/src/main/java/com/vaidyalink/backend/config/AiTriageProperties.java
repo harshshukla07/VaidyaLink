@@ -1,10 +1,11 @@
 package com.vaidyalink.backend.config;
 
-import lombok.Getter;
-import lombok.Setter;
+import java.time.Duration;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.time.Duration;
+import lombok.Getter;
+import lombok.Setter;
 
 @ConfigurationProperties(prefix = "ai.triage")
 @Getter
@@ -12,6 +13,7 @@ import java.time.Duration;
 public class AiTriageProperties {
     private String baseUrl = "http://localhost:8000";
     private boolean stubEnabled = true;
+    private String apiKey = "";
     private Duration connectTimeout = Duration.ofSeconds(5);
     private Duration readTimeout = Duration.ofSeconds(30);
 }

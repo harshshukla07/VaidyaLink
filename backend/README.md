@@ -6,16 +6,18 @@
 ![Redis](https://img.shields.io/badge/Redis-Cache-DC382D)
 ![Maven](https://img.shields.io/badge/Build-Maven-C71A36)
 ![JWT](https://img.shields.io/badge/Auth-JWT-orange)
+![OpenAPI](https://img.shields.io/badge/Docs-Swagger-85EA2D)
 
-Spring Boot platform API for VaidyaLink: authentication, doctor discovery, appointment booking, slot management, and AI triage chat orchestration.
+Spring Boot **platform API** for VaidyaLink. This service is the system of record for users, doctors, appointments, slots, and chat history. It also orchestrates AI triage by calling (or stubbing) the Python LangGraph microservice — optionally authenticated with a shared `X-API-Key` — then attaching recommended doctors when routing completes.
 
-> Parent overview: [`../README.md`](../README.md) · AI service: [`../ai-triage-service/README.md`](../ai-triage-service/README.md)
+> Parent: [`../README.md`](../README.md) · Frontend: [`../frontend/README.md`](../frontend/README.md) · AI: [`../ai-triage-service/README.md`](../ai-triage-service/README.md)
 
 ## Table of contents
 
-- [Scope](#scope)
+- [What this service owns](#what-this-service-owns)
 - [Tech stack](#tech-stack)
 - [Architecture](#architecture)
+- [Package guide](#package-guide)
 - [Security](#security)
 - [AI triage integration](#ai-triage-integration)
 - [Caching](#caching)
@@ -27,16 +29,20 @@ Spring Boot platform API for VaidyaLink: authentication, doctor discovery, appoi
 - [Configuration](#configuration)
 - [Run locally](#run-locally)
 - [Tests](#tests)
+- [Troubleshooting](#troubleshooting)
 
-## Scope
+## What this service owns
 
-- JWT auth with `ROLE_PATIENT` / `ROLE_DOCTOR`
-- Patient and doctor registration + `/api/auth/me`
-- Doctor listing, specialty filter, distinct specialties (cached)
-- Appointment booking, status lifecycle, search, upcoming list
-- Doctor shift slot generation + available-slot queries
-- Patient AI chat: session create/load, send message, triage orchestration
-- Pluggable AI client (`stub` for tests / offline, `REST` for the Python service)
+| Area | Details |
+|---|---|
+| Identity | Patient / doctor registration, login, `/api/auth/me` |
+| Authorization | JWT + `@PreAuthorize` roles |
+| Catalog | Doctors, specialties, Redis-cached lists |
+| Scheduling | Slot generation, available slots, booking, status lifecycle |
+| Chat | Session create/load, message persistence, triage client call |
+| AI boundary | `AiTriageClient` — stub for offline/tests, REST for live Python |
+
+It does **not** run LangGraph or call OpenAI directly. Reasoning lives in `ai-triage-service`.
 
 ## Tech stack
 
@@ -47,56 +53,75 @@ Spring Boot platform API for VaidyaLink: authentication, doctor discovery, appoi
 | Web | Spring Web MVC |
 | Persistence | Spring Data JPA + PostgreSQL |
 | Cache | Spring Cache + Redis |
-| Security | Spring Security + JJWT |
+| Security | Spring Security + JJWT 0.11.5 |
 | Validation | Jakarta Bean Validation |
-| Docs | Springdoc OpenAPI (Swagger UI) |
-| Build | Maven Wrapper |
-| Tests | JUnit 5, Mockito, H2 |
+| Docs | Springdoc OpenAPI 2.7 (Swagger UI) |
+| Build | Maven Wrapper (`mvnw` / `mvnw.cmd`) |
+| Tests | JUnit 5, Mockito, H2 (Redis autoconfig disabled in tests) |
 
 ## Architecture
 
 ```text
-Controller  →  Service  →  Repository  →  PostgreSQL
-                 │
-                 ├─→ Redis (Spring Cache)
-                 └─→ AiTriageClient
-                        ├─ StubAiTriageClient   (AI_TRIAGE_STUB=true)
-                        └─ RestAiTriageClient   → Python :8000
+HTTP Controllers
+      │
+      ▼
+  Services  ──► Repositories ──► PostgreSQL
+      │
+      ├──► Spring Cache ──► Redis
+      │
+      └──► AiTriageClient
+              ├── StubAiTriageClient     (AI_TRIAGE_STUB=true)
+              └── RestAiTriageClient     → http://localhost:8000
 ```
 
-Notable packages:
+Typical chat request:
+
+1. Controller resolves authenticated patient from JWT
+2. `ChatPersistenceHelper` saves the patient message (transaction)
+3. Service loads specialty allowlist (cached)
+4. Client calls Python triage (or stub)
+5. Helper saves AI reply (transaction)
+6. If complete and not `Emergency`, service loads doctors by specialty into the response
+
+## Package guide
 
 | Package | Responsibility |
 |---|---|
-| `controller` | HTTP surface, auth principal resolution |
-| `service` | Business rules and orchestration |
-| `client` | Outbound AI triage HTTP / stub |
-| `repository` | Spring Data JPA |
-| `entity` | Relational model |
-| `dto` | Request/response contracts (no entity leakage on public APIs) |
-| `security` | JWT filter, user details, method security |
-| `exception` | Centralized JSON error responses |
-| `config` | Security, Redis, RestClient beans |
+| `controller` | HTTP mapping, principal resolution, thin orchestration |
+| `service` | Business rules (booking, chat, doctors, slots) |
+| `client` | Outbound AI triage (`AiTriageClient` + stub/REST) |
+| `repository` | Spring Data JPA queries |
+| `entity` | JPA tables (`Patient`, `Doctor`, `Appointment`, `DoctorSlot`, `ChatSession`, `ChatMessage`, …) |
+| `dto` | Request/response contracts (entities are not exposed raw on public APIs) |
+| `security` | JWT util, filter, `UserDetailsService`, security filter chain |
+| `exception` | `GlobalExceptionHandler` → consistent JSON errors |
+| `config` | Security, Redis, OpenAPI, cache, `AiTriageProperties` + AI `RestClient` |
 
 ## Security
 
 ### Authentication
 
-- Login returns a JWT + role
+- `POST /api/auth/login` returns JWT + role (+ id/name enrichment)
 - Clients send `Authorization: Bearer <token>`
 - Stateless sessions (`SessionCreationPolicy.STATELESS`)
-- Passwords stored with BCrypt
+- Passwords hashed with BCrypt
 
 ### Authorization
 
-**Public**
+**Public (no JWT)**
 
-- `/api/auth/register/**`, `/api/auth/login`
+- `POST /api/auth/register/patient`
+- `POST /api/auth/register/doctor`
+- `POST /api/auth/login`
 - `/v3/api-docs/**`, `/swagger-ui/**`
 
-**Authenticated** — all other `/api/**` routes, with method-level `@PreAuthorize` where needed.
+**Authenticated** — all other `/api/**` routes. Method-level roles via `@EnableMethodSecurity` + `@PreAuthorize`.
 
-Chat endpoints resolve the patient from the JWT email (not from a client-supplied id), then enforce session ownership on send.
+### Chat ownership
+
+- `GET /api/chat/session` and `POST /api/chat/send` require `ROLE_PATIENT`
+- Patient id is resolved from the JWT email, not from a client-supplied id
+- Send verifies the session belongs to that patient before persisting
 
 ### CORS
 
@@ -105,40 +130,63 @@ Methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
 
 ## AI triage integration
 
-Chat flow on `POST /api/chat/send`:
+The backend never calls OpenAI directly. Chat orchestration goes through `AiTriageClient`, which has two implementations selected by configuration.
 
-1. Verify the session belongs to the authenticated patient
-2. Persist the patient message (+ load history)
-3. Load distinct specialties from DB (Redis-cached)
-4. Call `AiTriageClient.triage(...)` with messages + `allowedSpecialties`
-5. Persist the AI reply and session status
-6. If triage is complete (and not `Emergency`), attach matching `recommendedDoctors`
+### Client switch
 
-Config (`application.yml`):
+| Env | Behavior |
+|---|---|
+| `AI_TRIAGE_STUB=true` (default) | In-process `StubAiTriageClient` — no Python/OpenAI needed; useful for demos and unit tests |
+| `AI_TRIAGE_STUB=false` | `RestAiTriageClient` → `AI_TRIAGE_URL` (default `http://localhost:8000`) |
 
-| Property / env | Default | Meaning |
-|---|---|---|
-| `ai.triage.base-url` / `AI_TRIAGE_URL` | `http://localhost:8000` | Python service URL |
-| `ai.triage.stub-enabled` / `AI_TRIAGE_STUB` | `true` | Use in-process stub (no Python/OpenAI) |
-| connect / read timeouts | `5s` / `30s` | RestClient timeouts |
+Configuration lives in `AiTriageProperties` (`ai.triage.*`) and `AiTriageConfig`, which builds a dedicated `RestClient` bean when stub mode is off.
+
+| Property | Env / YAML | Default | Purpose |
+|---|---|---|---|
+| Base URL | `AI_TRIAGE_URL` / `ai.triage.base-url` | `http://localhost:8000` | Python service origin |
+| Stub flag | `AI_TRIAGE_STUB` / `ai.triage.stub-enabled` | `true` | Stub vs live REST |
+| API key | `AI_TRIAGE_API_KEY` / `ai.triage.api-key` | empty | Sent as `X-API-Key` when non-blank |
+| Connect / read timeouts | `ai.triage.connect-timeout` / `read-timeout` | `5s` / `30s` | `RestClient` timeouts |
+
+When `ai.triage.api-key` is set, every outbound triage call includes `X-API-Key`. Use the **same** value as `AI_TRIAGE_API_KEY` in the Python service `.env`.
+
+### Request shape sent to Python
+
+- `sessionId`
+- Full message history (`senderType`: `PATIENT` | `AI_BOT`, `messageText`)
+- `allowedSpecialties` from `doctorService.getDistinctSpecialities()` (Redis-cached)
+
+### Response handling
+
+| Python outcome | Backend behavior |
+|---|---|
+| Follow-up / off-topic (`is_complete=false`) | Save AI text; session stays active |
+| Specialty route (`is_complete=true`) | Save AI text; mark triage; attach `recommendedDoctors` (skip if specialty is `Emergency`) |
+| Emergency | Save AI text; no doctor list |
+| Auth failure (`401`) | Surfaces as triage client failure → **503** when REST client is active |
+| HTTP / timeout failures | Mapped to **503** when REST client is active |
+
+See the [AI triage README](../ai-triage-service/README.md) for graph nodes (safety, topic guard, structured outputs, API-key auth).
 
 ## Caching
 
 Redis-backed Spring Cache (`spring.cache.type=redis`, TTL 10m):
 
-| Cache name | Used for |
+| Cache name | Contents |
 |---|---|
 | `doctors_page` | Paginated doctor list |
-| `distinct_specialities` | Specialty allowlist for triage + API |
+| `distinct_specialities` | Specialty allowlist for triage + `GET /api/doctors/specialties` |
 
 Both are evicted when a new doctor is registered.
 
-Local Redis via Docker:
+Local Redis:
 
-```bash
+```powershell
 cd backend
 docker compose up -d
 ```
+
+(`docker-compose.yml` runs `redis:latest` as `vaidyalink-redis` on port `6379`.)
 
 ## Domain model
 
@@ -149,13 +197,14 @@ docker compose up -d
 `id`, `name`, `email` (unique), `speciality`, `experience`, `password` (BCrypt)
 
 ### Appointment
-`id`, `patient`, `doctor`, `appointmentDate`, `appointmentTime`, `status` (`PENDING` \| `CONFIRMED` \| `CANCELLED` \| `COMPLETED`)
+`id`, `patient`, `doctor`, `appointmentDate`, `appointmentTime`, `status`  
+Status enum: `PENDING` | `CONFIRMED` | `CANCELLED` | `COMPLETED`
 
 ### DoctorSlot
-Persisted bookable slots for a doctor/day (generated from shift window + duration)
+Persisted bookable intervals for a doctor/day (generated from shift window + duration)
 
 ### ChatSession / ChatMessage
-Patient-owned triage conversation; messages store sender type + text (embedding column reserved for future RAG)
+Patient-owned triage conversation. Messages store `senderType` (`PATIENT` | `AI_BOT`) and text. An embedding column exists for future RAG work and is unused in the current path.
 
 ## Business rules
 
@@ -166,8 +215,8 @@ Patient-owned triage conversation; messages store sender type + text (embedding 
 ### Booking
 - Date must be today or future; same-day past times blocked
 - Times normalized to minute precision
-- Slot minutes constrained to `:00`, `:20`, `:40` (or generated slot grid)
-- Duplicate doctor/date/time blocked unless prior booking is cancelled
+- Slot grid / minute boundaries enforced (e.g. `:00`, `:20`, `:40` depending on generation rules)
+- Duplicate doctor/date/time blocked unless the prior booking is cancelled
 - New bookings start as `PENDING`
 
 ### Status updates
@@ -195,7 +244,7 @@ Patient-owned triage conversation; messages store sender type + text (embedding 
 
 | Method | Endpoint | Access | Purpose |
 |---|---|---|---|
-| `GET` | `/api/doctors/specialties` | `PATIENT`, `DOCTOR` | Distinct specialties |
+| `GET` | `/api/doctors/specialties` | `PATIENT`, `DOCTOR` | Distinct specialties (cached) |
 | `GET` | `/api/doctors/{id}` | `PATIENT`, `DOCTOR` | Get doctor |
 | `GET` | `/api/doctors?speciality=…` | `PATIENT`, `DOCTOR` | Filter by specialty |
 | `GET` | `/api/doctors/all` | `PATIENT`, `DOCTOR` | List doctors (paged/cached) |
@@ -257,8 +306,7 @@ Example response when triage completes:
 
 ```json
 {
-  "sessionId": 1,
-  "aiReply": "Based on your symptoms, a General Physician is a good next step.",
+  "aiReply": "Based on your symptoms, I recommend seeing a General Physician. You can book an appointment now.",
   "triageComplete": true,
   "recommendedSpecialty": "General Physician",
   "recommendedDoctors": [
@@ -307,12 +355,12 @@ Example response when triage completes:
 | `EntityNotFoundException` | `404` |
 | `HttpRequestMethodNotSupportedException` | `405` |
 | `DataIntegrityViolationException` | `409` |
-| AI triage client failures | `503` (when Rest client is active) |
+| AI triage client failures | `503` (REST client active) |
 | Unhandled `Exception` | `500` |
 
 ## Configuration
 
-Required environment variables:
+### Required environment variables
 
 | Variable | Purpose |
 |---|---|
@@ -321,17 +369,19 @@ Required environment variables:
 | `DB_PASSWORD` | DB password |
 | `JWT_SECRET` | Base64-encoded HMAC secret |
 
-Optional:
+### Optional
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `SPRING_PROFILES_ACTIVE` | `prod` | Active profile |
 | `PORT` | `8080` | HTTP port |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Cache |
+| `REDIS_PASSWORD` / `REDIS_SSL` | empty / `false` | Redis auth / TLS |
 | `AI_TRIAGE_URL` | `http://localhost:8000` | Python service |
 | `AI_TRIAGE_STUB` | `true` | Stub vs REST client |
+| `AI_TRIAGE_API_KEY` | empty | Shared secret sent as `X-API-Key` to Python (set the same value in the AI service `.env`) |
 
-Secrets belong in environment variables or a gitignored local profile (`application-dev.yml`). Do not commit credentials.
+Secrets belong in environment variables or a **gitignored** local profile (`application-dev.yml`). Do not commit credentials.
 
 ## Run locally
 
@@ -368,17 +418,29 @@ export AI_TRIAGE_STUB="true"
 - Swagger UI: http://localhost:8080/swagger-ui/index.html
 - OpenAPI JSON: http://localhost:8080/v3/api-docs
 
+### Live AI mode
+
+1. Start `ai-triage-service` on `:8000` with `AI_TRIAGE_API_KEY` set in its `.env`
+2. Set the **same** key on the backend: `AI_TRIAGE_API_KEY`, plus `AI_TRIAGE_STUB=false` (and optionally `AI_TRIAGE_URL`)
+3. Restart this backend — `RestClient` sends `X-API-Key` on every triage call
+
 ## Tests
 
 ```powershell
 .\mvnw.cmd test
 ```
 
-Unit tests cover services, stub AI client, and chat orchestration (including specialty allowlist wiring). Integration tests use H2 and disable Redis autoconfig via `application-test.yml`.
+Coverage includes services, stub AI client, chat orchestration (specialty allowlist wiring), and doctor specialty queries. Integration-style tests use H2 and disable Redis autoconfiguration via `src/test/resources/application-test.yml`.
+
+Still light: dedicated tests for `RestAiTriageClient` (WireMock / MockWebServer) and controller-level security integration tests.
 
 ## Troubleshooting
 
-- **Auth 403** — confirm Bearer token and `@PreAuthorize` role on the endpoint
-- **Cache misses / Redis errors** — ensure Redis is running on `6379`
-- **AI 503** — if `AI_TRIAGE_STUB=false`, confirm the Python service is up at `AI_TRIAGE_URL`
-- **Schema drift** — Hibernate `ddl-auto=update` helps locally; keep migrations intentional for production
+| Symptom | Likely fix |
+|---|---|
+| Auth `403` | Check Bearer token and `@PreAuthorize` role |
+| Redis / cache errors | Ensure Redis is running on `6379` |
+| AI `503` | If stub is off, confirm Python is up at `AI_TRIAGE_URL`, and that both sides share the same `AI_TRIAGE_API_KEY` (or both leave it empty) |
+| AI key mismatch | Python returns `401`; backend surfaces that as a triage failure (`503` to the patient-facing API) |
+| Schema drift after entity changes | Hibernate `ddl-auto=update` helps locally; use intentional migrations for production |
+| Chat returns off-topic loop after jailbreak | Fixed in AI service (latest-message topic guard); update/redeploy Python service |

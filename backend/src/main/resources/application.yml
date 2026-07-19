@@ -40,5 +40,6 @@ ai:
   triage:
     base-url: ${AI_TRIAGE_URL:http://localhost:8000}
     stub-enabled: ${AI_TRIAGE_STUB:true}
+    api-key: ${AI_TRIAGE_API_KEY:}
     connect-timeout: 5s
     read-timeout: 30s

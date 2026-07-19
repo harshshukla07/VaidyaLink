@@ -18,9 +18,14 @@ public class AiTriageConfig {
         requestFactory.setConnectTimeout(properties.getConnectTimeout());
         requestFactory.setReadTimeout(properties.getReadTimeout());
 
-        return RestClient.builder()
+        RestClient.Builder builder = RestClient.builder()
                 .baseUrl(properties.getBaseUrl())
-                .requestFactory(requestFactory)
-                .build();
+                .requestFactory(requestFactory);
+
+        if (properties.getApiKey() != null && !properties.getApiKey().isBlank()) {
+            builder.defaultHeader("X-API-Key", properties.getApiKey());
+        }
+
+        return builder.build();
     }
 }

@@ -61,6 +61,7 @@ def triage(request: TriageRequest) -> TriageResponse:
         "is_complete": False,
         "recommended_specialty": None,
         "is_emergency": False,
+        "is_off_topic": False,
         "has_enough_info": False,
         "allowed_specialties": request.allowed_specialties,
     }

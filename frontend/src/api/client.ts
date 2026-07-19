@@ -108,6 +108,11 @@ export const api = {
     return request<AuthUser>('/api/auth/me')
   },
 
+  /** Keep the AI triage service warm while the user is logged in. */
+  warmupAi() {
+    return request<{ status: string }>('/api/ai/warmup')
+  },
+
   getChatSession() {
     return request<ChatSession>('/api/chat/session')
   },

@@ -20,6 +20,8 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 const STORAGE_KEY = 'vl_auth'
+/** Ping AI via backend every 7 minutes while a session is active (Render cold starts). */
+const AI_WARMUP_INTERVAL_MS = 7 * 60 * 1000
 
 function persist(user: AuthUser | null) {
   if (!user?.token) {
@@ -65,6 +67,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .finally(() => setLoading(false))
   }, [])
+
+  // Wake / keep warm the AI triage service for the whole logged-in session.
+  useEffect(() => {
+    if (!user?.token) return
+
+    const ping = () => {
+      void api.warmupAi().catch(() => {
+        // Ignore — a failed ping can still wake Render; triage has its own errors.
+      })
+    }
+
+    ping()
+    const timerId = window.setInterval(ping, AI_WARMUP_INTERVAL_MS)
+    return () => window.clearInterval(timerId)
+  }, [user?.token])
 
   async function login(email: string, password: string) {
     const auth = await api.login(email, password)

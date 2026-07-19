@@ -37,4 +37,12 @@ public class RestAiTriageClient implements AiTriageClient {
             throw new AiTriageException("AI triage service is temporarily unavailable", ex);
         }
     }
+
+    @Override
+    public void warmup() {
+        restClient.get()
+                .uri("/health")
+                .retrieve()
+                .toBodilessEntity();
+    }
 }

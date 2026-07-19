@@ -45,5 +45,6 @@ ai:
     base-url: ${AI_TRIAGE_URL:http://localhost:8000}
     stub-enabled: ${AI_TRIAGE_STUB:true}
     api-key: ${AI_TRIAGE_API_KEY:}
-    connect-timeout: 5s
-    read-timeout: 30s
+    # Slightly longer to survive Render free-tier cold starts
+    connect-timeout: 20s
+    read-timeout: 60s

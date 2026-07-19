@@ -1,33 +1,29 @@
+from app.errors import LlmServiceError
+from app.graph.constants import DEFAULT_SPECIALTY, EMERGENCY_KEYWORDS
 from app.graph.state import TriageState
 from app.llm.client import get_llm
+from app.schemas.llm import CompletenessAssessment, FollowUpQuestion, SpecialtyChoice
 
-from app.graph.constants import (
-    EMERGENCY_KEYWORDS,
-    DEFAULT_SPECIALTY,
-)
 
 def _patient_messages(state: TriageState) -> list[dict]:
     return [m for m in state["messages"] if m.get("sender_type") == "PATIENT"]
 
+
 def _all_patient_text(state: TriageState) -> str:
-    return " ".join(m["message_text"] for m in _patient_messages(state)).lower()
+    return " ".join(
+        m["message_text"] for m in _patient_messages(state) if m.get("message_text")
+    ).lower()
 
 
-def generate_followup(state: TriageState) -> dict:
-
-    messages = _all_patient_text(state)
-    llm = get_llm()
-    prompt = (
-        "You are a triage assistant. The patient has said: {messages}."
-        " Generate a specific follow-up question about the symptoms described."
-        " Do not ask general or vague questions. Focus on clarifying details such as severity, onset, progression, or related factors about the mentioned symptom(s)."
-    )
-    response = llm.invoke(prompt.format(messages=messages))
-    return {
-        "ai_reply": str(response.content),
-        "is_complete": False,
-        "recommended_specialty": None,
-    }
+def _invoke_structured(schema: type, prompt: str):
+    """Call the LLM with a Pydantic schema; wrap provider failures."""
+    try:
+        llm = get_llm().with_structured_output(schema)
+        return llm.invoke(prompt)
+    except LlmServiceError:
+        raise
+    except Exception as exc:
+        raise LlmServiceError(f"LLM call failed: {exc}") from exc
 
 
 def _match_allowed_specialty(raw: str, allowed: list[str]) -> str | None:
@@ -38,47 +34,6 @@ def _match_allowed_specialty(raw: str, allowed: list[str]) -> str | None:
             return specialty
     return None
 
-
-def route_specialty(state: TriageState) -> dict:
-    """
-    LLM chooses one specialty from Java's allowlist.
-    If unsure / invalid → General Physician (DEFAULT_SPECIALTY).
-    """
-    text = _all_patient_text(state)
-    allowed = list(state.get("allowed_specialties") or [])
-
-    # Ensure GP is always a valid fallback even if list is empty/odd
-    if DEFAULT_SPECIALTY not in allowed:
-        allowed.append(DEFAULT_SPECIALTY)
-
-    specialties_text = ", ".join(allowed)
-    prompt = (
-        "You are a medical triage assistant (not a doctor). "
-        "Given the patient information below, choose the single best specialty "
-        "from this hospital allowlist ONLY:\n"
-        f"{specialties_text}\n\n"
-        f"Patient information: \"{text}\"\n\n"
-        "Rules:\n"
-        "- Reply with ONLY the specialty name, nothing else.\n"
-        "- The name must match one item from the allowlist exactly.\n"
-        "- If you are not sure, reply with exactly: General Physician\n"
-    )
-
-    llm = get_llm()
-    response = llm.invoke(prompt)
-    suggested = _match_allowed_specialty(str(response.content), allowed)
-
-    if suggested is None:
-        suggested = DEFAULT_SPECIALTY
-
-    return {
-        "ai_reply": (
-            f"Based on your symptoms, I recommend seeing a {suggested}. "
-            "You can book an appointment now."
-        ),
-        "is_complete": True,
-        "recommended_specialty": suggested,
-    }
 
 def safety_check(state: TriageState) -> dict:
     text = _all_patient_text(state)
@@ -92,32 +47,86 @@ def safety_check(state: TriageState) -> dict:
         "is_emergency": is_emergency,
     }
 
+
 def emergency_response(state: TriageState) -> dict:
     return {
-        "ai_reply": "Your symptoms may need urgent care. Please seek emergency medical help or call local emergency services immediately.",
+        "ai_reply": (
+            "Your symptoms may need urgent care. Please seek emergency medical help "
+            "or call local emergency services immediately."
+        ),
         "is_complete": True,
         "recommended_specialty": "Emergency",
         "is_emergency": True,
     }
 
+
 def assess_completeness(state: TriageState) -> dict:
-    """Ask the LLM if we have enough info. Must return a real bool for the router."""
     text = _all_patient_text(state)
     allowed = state.get("allowed_specialties") or []
     specialties_text = ", ".join(allowed) if allowed else "the hospital specialty list"
 
     prompt = (
         "You are an AI triage assistant for a medical microservice. "
-        f"Given the following patient-provided information: \"{text}\" "
+        f'Given the following patient-provided information: "{text}" '
         f"decide if this is enough to recommend one specialty from: {specialties_text}, "
-        "or if you need one more clarifying question. "
-        "Reply with ONLY the word True or False."
+        "or if you need one more clarifying question."
     )
-    llm = get_llm()
-    response = llm.invoke(prompt)
-    answer = str(response.content).strip().lower()
-    # Do NOT use bool(answer) — bool("false") is True in Python
-    has_enough = answer.startswith("true")
+    result: CompletenessAssessment = _invoke_structured(CompletenessAssessment, prompt)
     return {
-        "has_enough_info": has_enough,
+        "has_enough_info": bool(result.has_enough_info),
+    }
+
+
+def generate_followup(state: TriageState) -> dict:
+    messages = _all_patient_text(state)
+    prompt = (
+        "You are a triage assistant. The patient has said: "
+        f'"{messages}". '
+        "Generate a specific follow-up question about the symptoms described. "
+        "Do not ask general or vague questions. Focus on clarifying details such as "
+        "severity, onset, progression, or related factors about the mentioned symptom(s)."
+    )
+    result: FollowUpQuestion = _invoke_structured(FollowUpQuestion, prompt)
+    return {
+        "ai_reply": result.question.strip(),
+        "is_complete": False,
+        "recommended_specialty": None,
+    }
+
+
+def route_specialty(state: TriageState) -> dict:
+    """
+    LLM chooses one specialty from Java's allowlist.
+    If unsure / invalid → General Physician (DEFAULT_SPECIALTY).
+    """
+    text = _all_patient_text(state)
+    allowed = list(state.get("allowed_specialties") or [])
+
+    if DEFAULT_SPECIALTY not in allowed:
+        allowed.append(DEFAULT_SPECIALTY)
+
+    specialties_text = ", ".join(allowed)
+    prompt = (
+        "You are a medical triage assistant (not a doctor). "
+        "Given the patient information below, choose the single best specialty "
+        "from this hospital allowlist ONLY:\n"
+        f"{specialties_text}\n\n"
+        f'Patient information: "{text}"\n\n'
+        "Rules:\n"
+        "- The specialty must match one item from the allowlist exactly.\n"
+        f"- If you are not sure, use exactly: {DEFAULT_SPECIALTY}\n"
+    )
+
+    result: SpecialtyChoice = _invoke_structured(SpecialtyChoice, prompt)
+    suggested = _match_allowed_specialty(result.specialty, allowed)
+    if suggested is None:
+        suggested = DEFAULT_SPECIALTY
+
+    return {
+        "ai_reply": (
+            f"Based on your symptoms, I recommend seeing a {suggested}. "
+            "You can book an appointment now."
+        ),
+        "is_complete": True,
+        "recommended_specialty": suggested,
     }

@@ -1,15 +1,17 @@
 import os
+
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
-load_dotenv()  
+from app.errors import LlmServiceError
 
-def get_llm()->ChatOpenAI:
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    if not OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is not set in environment variables.")
+load_dotenv()
 
-    model = os.getenv("OPENAI_MODEL")
-    if not model:
-        raise RuntimeError("OPENAI_MODEL is not set in environment variables.")
-    return ChatOpenAI(api_key=OPENAI_API_KEY, temperature=0.2, model=model)
+
+def get_llm() -> ChatOpenAI:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise LlmServiceError("OPENAI_API_KEY is not set")
+
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    return ChatOpenAI(api_key=api_key, temperature=0.2, model=model)

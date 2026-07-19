@@ -174,10 +174,27 @@ $env:AI_TRIAGE_URL="http://localhost:8000"
 
 Then restart the backend so `RestAiTriageClient` is active.
 
+## Errors
+
+| Status | When |
+|---|---|
+| `400` | Empty `messages`, or no non-blank `PATIENT` text |
+| `503` | Missing `OPENAI_API_KEY`, provider failure, or graph failure |
+
+## Tests
+
+```powershell
+pip install -r requirements.txt
+pytest
+```
+
+LLM calls are mocked — no API key required for the suite.
+
 ## Design notes
 
 - **Allowlist first** — routing is constrained to specialties Java loaded from the doctor table
 - **Emergency is deterministic** — keyword path does not depend on the LLM
+- **Structured LLM outputs** — completeness, follow-up, and specialty use Pydantic schemas via `with_structured_output`
 - **Stateless v1** — full message history is sent on every call; no server-side checkpointing yet
 - **GP fallback** — if the model returns something outside the allowlist, default to General Physician
 
@@ -187,9 +204,10 @@ Then restart the backend so `RestAiTriageClient` is active.
 |---|---|
 | Safety + completeness + specialty routing | Done |
 | Specialty allowlist from Java | Done |
+| Structured LLM outputs + error handling + tests | Done |
 | RAG / clinical knowledge base | Planned |
 | Graph checkpointing / multi-turn memory in Python | Deferred (Java owns history today) |
-| Stronger structured LLM outputs (JSON schema) | Planned |
+| Internal service auth (shared API key) | Planned |
 
 ## Disclaimer
 

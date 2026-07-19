@@ -1,5 +1,8 @@
 DEFAULT_SPECIALTY = "General Physician"
 
+# Max AI follow-up questions before we force specialty routing (avoids endless interviews).
+MAX_AI_FOLLOWUPS = 3
+
 EMERGENCY_KEYWORDS = [
     "chest pain",
     "can't breathe",

@@ -336,6 +336,7 @@ LLM calls are mocked (`FakeLLM`) — no OpenAI key required in CI or local test 
 - **Templated specialty reply** — user-facing routing sentence is built in code
 - **Stateless v1** — Java resends history every call; no Python checkpointing yet
 - **GP fallback** — invalid / unknown specialty → `General Physician`
+- **Follow-up cap** — after `MAX_AI_FOLLOWUPS` (3) AI questions, the graph forces specialty routing even if the completeness LLM still wants more detail
 
 ## Roadmap
 

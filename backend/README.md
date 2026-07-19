@@ -110,6 +110,7 @@ Typical chat request:
 
 **Public (no JWT)**
 
+- `GET /api/health`
 - `POST /api/auth/register/patient`
 - `POST /api/auth/register/doctor`
 - `POST /api/auth/login`
@@ -125,7 +126,11 @@ Typical chat request:
 
 ### CORS
 
-Allowed origins: `http://localhost:3000`, `http://localhost:5173`  
+Allowed origins come from `CORS_ALLOWED_ORIGINS` (comma-separated), defaulting to  
+`http://localhost:3000,http://localhost:5173`.
+
+For Vercel, set e.g. `CORS_ALLOWED_ORIGINS=https://your-app.vercel.app,http://localhost:5173`.
+
 Methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`
 
 ## AI triage integration
@@ -380,6 +385,7 @@ Example response when triage completes:
 | `AI_TRIAGE_URL` | `http://localhost:8000` | Python service |
 | `AI_TRIAGE_STUB` | `true` | Stub vs REST client |
 | `AI_TRIAGE_API_KEY` | empty | Shared secret sent as `X-API-Key` to Python (set the same value in the AI service `.env`) |
+| `CORS_ALLOWED_ORIGINS` | localhost Vite/CRA | Comma-separated browser origins (add your Vercel URL in prod) |
 
 Secrets belong in environment variables or a **gitignored** local profile (`application-dev.yml`). Do not commit credentials.
 

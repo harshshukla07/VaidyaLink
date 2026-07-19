@@ -1,5 +1,6 @@
 from langgraph.graph import END, START, StateGraph
 
+from app.graph.constants import MAX_AI_FOLLOWUPS
 from app.graph.nodes import (
     assess_completeness,
     emergency_response,
@@ -10,6 +11,15 @@ from app.graph.nodes import (
     topic_guard,
 )
 from app.graph.state import TriageState
+
+
+def _ai_followup_count(state: TriageState) -> int:
+    """How many AI replies are already in the conversation history."""
+    return sum(
+        1
+        for msg in state.get("messages") or []
+        if msg.get("sender_type") == "AI_BOT"
+    )
 
 
 def route_after_safety(state: TriageState) -> str:
@@ -27,8 +37,13 @@ def route_after_topic_guard(state: TriageState) -> str:
 
 
 def route_after_assess(state: TriageState) -> str:
-    """Use the flag set by assess_completeness (LLM)."""
+    """
+    Route when the LLM says we have enough info, or when we have already
+    asked MAX_AI_FOLLOWUPS clarifying questions (hard cap for UX).
+    """
     if state.get("has_enough_info"):
+        return "route_specialty"
+    if _ai_followup_count(state) >= MAX_AI_FOLLOWUPS:
         return "route_specialty"
     return "generate_followup"
 

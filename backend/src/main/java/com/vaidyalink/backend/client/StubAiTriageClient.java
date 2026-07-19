@@ -18,4 +18,9 @@ public class StubAiTriageClient implements AiTriageClient {
                 .recommendedSpecialty(null)
                 .build();
     }
+
+    @Override
+    public void warmup() {
+        // No remote service when stub mode is on.
+    }
 }

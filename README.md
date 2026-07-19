@@ -101,41 +101,30 @@ Design principle: the AI service is **stateless**. Java owns identity, chat hist
 ```text
 VaidyaLink/
 ├── README.md                      ← monorepo overview (this file)
+├── render.yaml                    ← Render blueprint (backend + AI)
 ├── .gitignore                     ← secrets, venv, target, .env, etc.
 │
-├── frontend/                      ← React 19 + Vite + TypeScript SPA
+├── frontend/                      ← React 19 + Vite + TypeScript SPA → Vercel
 │   ├── README.md
+│   ├── vercel.json                ← SPA rewrites
+│   ├── .env.example
 │   ├── package.json
 │   └── src/
-│       ├── api/                   ← fetch client + types
-│       ├── pages/                 ← patient & doctor screens
-│       └── components/            ← shell, guards, shared UI
 │
-├── backend/                       ← Spring Boot 4 / Java 21 API
+├── backend/                       ← Spring Boot 4 / Java 21 API → Render
 │   ├── README.md
+│   ├── Dockerfile
 │   ├── docker-compose.yml         ← Redis for local cache
 │   ├── pom.xml
 │   └── src/main/java/.../backend/
-│       ├── controller/
-│       ├── service/
-│       ├── client/                ← AiTriageClient (stub + REST)
-│       ├── config/                ← AiTriageProperties, RestClient, security
-│       ├── security/
-│       ├── entity/ · dto/ · repository/
-│       └── exception/
 │
-└── ai-triage-service/             ← FastAPI + LangGraph microservice
+└── ai-triage-service/             ← FastAPI + LangGraph → Render
     ├── README.md
+    ├── Dockerfile
     ├── requirements.txt
     ├── .env.example
-    ├── tests/                     ← pytest (mocked LLM)
+    ├── tests/
     └── app/
-        ├── main.py
-        ├── security.py            ← optional X-API-Key guard
-        ├── errors.py
-        ├── graph/                 ← nodes, builder, constants
-        ├── llm/
-        └── schemas/
 ```
 
 ---
@@ -245,6 +234,68 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ---
 
+## Deploy (Render + Vercel)
+
+Target topology:
+
+| Piece | Host | Notes |
+|---|---|---|
+| Frontend | **Vercel** | Root directory `frontend/`; set `VITE_API_BASE_URL` |
+| Backend | **Render** (Docker) | `backend/Dockerfile`; public `/api/health` |
+| AI triage | **Render** (Docker) | `ai-triage-service/Dockerfile`; public `/health` |
+| Postgres | Neon (or Render Postgres) | Same `DB_*` vars as local prod profile |
+| Redis | Upstash | Set `REDIS_HOST`, `REDIS_PASSWORD`, `REDIS_SSL=true` |
+
+Blueprint file: [`render.yaml`](render.yaml) (backend + AI). Frontend is created in the Vercel dashboard (or CLI) against this repo.
+
+### 1. Render — AI triage first
+
+1. New Web Service → Docker → context `ai-triage-service`
+2. Env: `OPENAI_API_KEY`, `AI_TRIAGE_API_KEY` (long random secret), optional `OPENAI_MODEL`
+3. Note the public URL, e.g. `https://vaidyalink-ai-triage.onrender.com`
+
+### 2. Render — Spring Boot backend
+
+1. New Web Service → Docker → context `backend`
+2. Set env vars:
+
+| Variable | Example / notes |
+|---|---|
+| `DB_URL` | Neon JDBC URL |
+| `DB_USERNAME` / `DB_PASSWORD` | DB credentials |
+| `JWT_SECRET` | Long base64 secret |
+| `REDIS_HOST` / `REDIS_PASSWORD` | Upstash |
+| `REDIS_PORT` | `6379` |
+| `REDIS_SSL` | `true` |
+| `AI_TRIAGE_STUB` | `false` |
+| `AI_TRIAGE_URL` | AI service URL from step 1 |
+| `AI_TRIAGE_API_KEY` | **Same** value as on the AI service |
+| `CORS_ALLOWED_ORIGINS` | Your Vercel URL, e.g. `https://vaidyalink.vercel.app` (comma-separate extras) |
+
+3. Health check path: `/api/health`  
+4. Free-tier note: Spring Boot is memory-hungry; if the service OOMs, bump the Render plan.
+
+### 3. Vercel — frontend
+
+1. Import the repo → **Root Directory** = `frontend`
+2. Framework preset: Vite
+3. Env: `VITE_API_BASE_URL=https://<your-backend>.onrender.com` (no trailing slash)
+4. Deploy — SPA rewrites are in `frontend/vercel.json`
+
+### 4. Wire CORS after first Vercel URL exists
+
+Update Render backend `CORS_ALLOWED_ORIGINS` to include the production Vercel origin, then restart the backend. Local Vite (`http://localhost:5173`) can stay in the list for hybrid testing.
+
+### Smoke checklist
+
+- `GET https://<ai>/health` → `UP`
+- `GET https://<backend>/api/health` → `UP`
+- Open the Vercel site → register/login → triage chat → book a slot
+
+Cold starts on Render free tier can take ~30–60s after idle; the first API call may time out once.
+
+---
+
 ## Documentation map
 
 | Document | Audience | Contents |
@@ -277,13 +328,14 @@ VITE_API_BASE_URL=http://localhost:8080
 | Recommended doctors after triage | Implemented |
 | Frontend (Vite + React) | Implemented |
 | Internal AI service auth (shared API key / `X-API-Key`) | Implemented |
-| Dockerfile / deploy packaging for AI service | Planned |
-| Monorepo CI / full-stack docker-compose | Planned |
+| Docker packaging (backend + AI) + Render/Vercel deploy docs | Implemented |
+| Live deploy on Render + Vercel | In progress |
+| Monorepo CI | Planned |
 | RAG over clinical knowledge | Deferred |
 
 ### Still on the roadmap
 
-- Package the AI service for deploy (Dockerfile) and optionally compose all three services together
+- Finish production deploy (set Render/Vercel secrets, verify CORS + live triage)
 - Broader automated tests (`RestAiTriageClient`, frontend)
 - Structured request logging with `sessionId` in Python
 - RAG / clinical knowledge (embedding column exists but unused)

@@ -1,0 +1,59 @@
+# Render Blueprint for backend + AI triage.
+# Frontend deploys separately on Vercel (root directory: frontend).
+#
+# After first deploy:
+# 1. Set all sync:false secrets in the Render dashboard
+# 2. Set AI_TRIAGE_URL to the AI service public URL, e.g. https://vaidyalink-ai-triage.onrender.com
+# 3. Set CORS_ALLOWED_ORIGINS to your Vercel URL (and keep localhost for local UI if needed)
+# 4. Set the same AI_TRIAGE_API_KEY on both services
+
+services:
+  - type: web
+    name: vaidyalink-ai-triage
+    runtime: docker
+    plan: free
+    dockerfilePath: ./ai-triage-service/Dockerfile
+    dockerContext: ./ai-triage-service
+    healthCheckPath: /health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: AI_TRIAGE_API_KEY
+        sync: false
+
+  - type: web
+    name: vaidyalink-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        value: "6379"
+      - key: REDIS_PASSWORD
+        sync: false
+      - key: REDIS_SSL
+        value: "true"
+      - key: AI_TRIAGE_STUB
+        value: "false"
+      - key: AI_TRIAGE_URL
+        sync: false
+      - key: AI_TRIAGE_API_KEY
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false

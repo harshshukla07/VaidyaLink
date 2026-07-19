@@ -192,8 +192,16 @@ Backend failures during live triage typically surface as an error state on send 
 
 For graph details (safety, topic guard, structured LLM outputs, API-key auth), see the [AI triage README](../ai-triage-service/README.md).
 
+## Deploy on Vercel
+
+1. Import this Git repo in Vercel
+2. Set **Root Directory** to `frontend`
+3. Add env `VITE_API_BASE_URL` = your Render backend URL (e.g. `https://vaidyalink-backend.onrender.com`)
+4. Deploy — `vercel.json` rewrites unknown paths to `index.html` for React Router
+
+Also allow that Vercel origin on the backend via `CORS_ALLOWED_ORIGINS` (see root [Deploy section](../README.md#deploy-render--vercel)).
+
 ## Known gaps
 
 - No automated frontend test suite yet (`*.test.*` / Vitest / Playwright)
-- No production Docker image for the SPA in this repo (Vite `build` + static hosting is the current path)
-- Auth token storage is client-side; treat local demos accordingly and avoid sharing browser profiles with real credentials
+- Auth token storage is client-side; treat demos accordingly and avoid sharing browser profiles with real credentials

@@ -348,7 +348,8 @@ LLM calls are mocked (`FakeLLM`) — no OpenAI key required in CI or local test 
 | Jailbreak / off-topic guard (latest-message) | Done |
 | Word-boundary emergency matching | Done |
 | Internal service auth (shared API key with Java) | Done |
-| Dockerfile + structured request logging (`sessionId`) | Planned |
+| Dockerfile (Render-ready) | Done |
+| Structured request logging (`sessionId`) | Planned |
 | RAG / clinical knowledge base | Planned |
 | Graph checkpointing in Python | Deferred (Java owns history) |
 
